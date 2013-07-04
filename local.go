@@ -5,13 +5,26 @@ import (
   "fmt"
   "./socks"
   cr "./conn_reader"
+  "net"
 )
 
 var defaultConfig = map[string]string{
   "local": "localhost:23456",
+  "remote": "localhost:34567",
+}
+var globalConfig = loadConfig(defaultConfig)
+func checkConfig(key string) {
+  if value, ok := globalConfig[key]; !ok || value == "" {
+    globalConfig[key] = defaultConfig[key]
+    saveConfig(globalConfig)
+    globalConfig = loadConfig(defaultConfig)
+  }
 }
 
-var globalConfig = loadConfig(defaultConfig)
+func init() {
+  checkConfig("local")
+  checkConfig("remote")
+}
 
 func main() {
   socksServer, err := socks.New(globalConfig["local"])
@@ -19,15 +32,46 @@ func main() {
     log.Fatal(err)
   }
   fmt.Printf("socks server listening on %s\n", globalConfig["local"])
-  connReader := cr.New()
+
+  clientReader := cr.New()
+
+  var serverConn *net.TCPConn
   go func() {
-    for {
-      socksClient := (<-socksServer.Clients.Out).(*socks.Client)
-      connReader.Add(socksClient.Conn)
-    }
+    addr, err := net.ResolveTCPAddr("tcp", globalConfig["remote"])
+    if err != nil { log.Fatal("cannot resolve remote addr ", err) }
+    serverConn, err = net.DialTCP("tcp", nil, addr)
+    if err != nil { log.Fatal("cannot connect to remote server ", err) }
+    fmt.Printf("connected to server %v\n", serverConn.RemoteAddr())
   }()
+
+  sessions := make(map[int64]*Session)
   for {
-    msg := (<-connReader.Messages.Out).(cr.Message)
-    fmt.Printf("%v\n", msg)
+    select {
+    case socksClientI := <-socksServer.Clients.Out:
+      socksClient := socksClientI.(*socks.Client)
+      info := clientReader.Add(socksClient.Conn, -1)
+      session := &Session{
+        Id: info.Id,
+        Conn: serverConn,
+        HostPort: socksClient.HostPort,
+      }
+      sessions[session.Id] = session
+      err := session.Connect()
+      if err != nil { log.Fatal(err) }
+    case msgI := <-clientReader.Messages.Out:
+      handleClientMsg(msgI.(cr.Message))
+    }
+  }
+
+}
+
+func handleClientMsg(msg cr.Message) {
+  switch msg.Type {
+  case cr.DATA:
+    //fmt.Printf("=> %s\n", msg.Data[:128])
+  case cr.EOF:
+    msg.Info.TCPConn.Close()
+  case cr.ERROR:
+    log.Fatal(msg.Data)
   }
 }
