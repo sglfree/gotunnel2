@@ -6,7 +6,7 @@ import (
 
 func TestChan(t *testing.T) {
   c := New()
-  n := 5000000
+  n := 100000
   for i := 0; i < n; i++ {
     c.In <- i
   }
