@@ -11,10 +11,12 @@ import (
   "os"
 )
 
+const CONFIG_FILENAME = ".gotunnel.conf"
+
 func loadConfig(defaultConf map[string]string) map[string]string {
   currentUser, err := user.Current()
   if err != nil { log.Fatal("cannot get current user") }
-  configFilePath := filepath.Join(currentUser.HomeDir, ".mytube.conf")
+  configFilePath := filepath.Join(currentUser.HomeDir, CONFIG_FILENAME)
   s, err := ioutil.ReadFile(configFilePath)
   if err != nil {
     if !strings.Contains(err.Error(), "no such file") { log.Fatal(err) }
@@ -25,6 +27,14 @@ func loadConfig(defaultConf map[string]string) map[string]string {
   err = json.Unmarshal(s, &config)
   if err != nil { log.Fatal("config file parse error") }
   return config
+}
+
+func saveConfig(conf map[string]string) {
+  currentUser, err := user.Current()
+  if err != nil { log.Fatal("cannot get current user") }
+  configFilePath := filepath.Join(currentUser.HomeDir, CONFIG_FILENAME)
+  err = ioutil.WriteFile(configFilePath, marshalConfig(conf), os.ModePerm)
+  if err != nil { log.Fatal("cannot write config file") }
 }
 
 func marshalConfig(config map[string]string) []byte {
