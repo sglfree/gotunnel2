@@ -4,6 +4,7 @@ import (
   "log"
   "fmt"
   "./socks"
+  cr "./conn_reader"
 )
 
 var defaultConfig = map[string]string{
@@ -18,8 +19,15 @@ func main() {
     log.Fatal(err)
   }
   fmt.Printf("socks server listening on %s\n", globalConfig["local"])
+  connReader := cr.New()
+  go func() {
+    for {
+      socksClient := (<-socksServer.Clients.Out).(*socks.Client)
+      connReader.Add(socksClient.Conn)
+    }
+  }()
   for {
-    socksClient := (<-socksServer.Clients.Out).(*socks.Client)
-    fmt.Printf("%v\n", socksClient)
+    msg := (<-connReader.Messages.Out).(cr.Message)
+    fmt.Printf("%v\n", msg)
   }
 }
