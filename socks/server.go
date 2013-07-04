@@ -130,6 +130,7 @@ func (self *Server) handshake(conn *net.TCPConn) error {
     writeAck(conn, REP_COMMAND_NOT_SUPPORTED)
     return self.newError("handshake")
   }
+  writeAck(conn, REP_SUCCEED)
 
   client := &Client{
     Conn: conn,
