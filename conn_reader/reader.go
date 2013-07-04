@@ -45,10 +45,13 @@ func (self *ConnReader) Close() {
   self.Messages.Close()
 }
 
-func (self *ConnReader) Add(tcpConn *net.TCPConn) *Info {
+func (self *ConnReader) Add(tcpConn *net.TCPConn, id int64) *Info {
+  if id < int64(0) {
+    id = rand.Int63()
+  }
   info := &Info{
     TCPConn: tcpConn,
-    Id: rand.Int63(),
+    Id: id,
   }
   go func() {
     for {
