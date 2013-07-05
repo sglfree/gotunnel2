@@ -8,7 +8,7 @@ import (
   "io"
 )
 
-const BUFFER_SIZE = 2048
+const BUFFER_SIZE = 5600
 
 func init() {
   rand.Seed(time.Now().UnixNano())
