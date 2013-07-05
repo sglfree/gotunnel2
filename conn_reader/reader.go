@@ -57,6 +57,9 @@ func (self *ConnReader) Add(tcpConn *net.TCPConn, id int64) *Info {
     for {
       buf := make([]byte, 2048)
       n, err := tcpConn.Read(buf)
+      if n > 0 {
+        self.Messages.In <- Message{info, DATA, buf[:n]}
+      }
       if err != nil {
         if err == io.EOF { //EOF
           self.Messages.In <- Message{info, EOF, nil}
@@ -65,7 +68,6 @@ func (self *ConnReader) Add(tcpConn *net.TCPConn, id int64) *Info {
         }
         return
       }
-      self.Messages.In <- Message{info, DATA, buf[:n]}
     }
   }()
   return info
