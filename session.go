@@ -142,7 +142,10 @@ func startRemoteReader(sessions map[int64]*Session, conn *net.TCPConn) *ic.Infin
       case EOF:
         session, ok := sessions[id]
         if !ok { continue loop }
-        session.LocalConn.Close()
+        go func() {
+          <-time.After(time.Second * 10)
+          session.LocalConn.Close()
+        }()
         session.log("remote >> EOF")
         session.remoteClosed = true
         if session.localClosed {
