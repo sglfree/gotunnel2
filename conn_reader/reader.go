@@ -8,7 +8,7 @@ import (
   "io"
 )
 
-const BUFFER_SIZE = 5600
+const BUFFER_SIZE = 11200
 
 func init() {
   rand.Seed(time.Now().UnixNano())
@@ -55,7 +55,7 @@ func (self *ConnReader) Add(tcpConn *net.TCPConn, id int64) *Info {
   }
   go func() {
     for {
-      buf := make([]byte, 2048)
+      buf := make([]byte, BUFFER_SIZE)
       n, err := tcpConn.Read(buf)
       if n > 0 {
         self.Messages.In <- Message{info, DATA, buf[:n]}
