@@ -5,7 +5,7 @@ import (
   "os/user"
   "log"
   "path/filepath"
-  "strings"
+  //"strings"
   "encoding/json"
   "bytes"
   "os"
@@ -19,7 +19,7 @@ func loadConfig(defaultConf map[string]string) map[string]string {
   configFilePath := filepath.Join(currentUser.HomeDir, CONFIG_FILENAME)
   s, err := ioutil.ReadFile(configFilePath)
   if err != nil {
-    if !strings.Contains(err.Error(), "no such file") { log.Fatal(err) }
+    //if !strings.Contains(err.Error(), "no such file") { log.Fatal(err) }
     err = ioutil.WriteFile(configFilePath, marshalConfig(defaultConf), os.ModePerm)
     return defaultConf
   }
