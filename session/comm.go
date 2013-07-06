@@ -34,7 +34,7 @@ type Comm struct {
   Messages chan Message
 }
 
-func NewComm(conn *net.TCPConn) (*Comm, error) {
+func NewComm(conn *net.TCPConn) (*Comm) {
   c := &Comm{
     conn: conn,
     sessions: make(map[int64]*Session),
@@ -43,7 +43,7 @@ func NewComm(conn *net.TCPConn) (*Comm, error) {
   }
   go c.startSender()
   go c.startReader()
-  return c, nil
+  return c
 }
 
 func (self *Comm) startSender() {
@@ -69,8 +69,8 @@ func (self *Comm) startReader() {
     }
     switch t {
     case typeConnect:
-      session := self.NewSession(id)
-      self.provideMessage(Message{Type: SESSION, Session: session})
+      session := self.NewSession(id, nil)
+      self.provideMessage(Message{Type: SESSION, Session: session, Data: data})
     case typeData:
       session, ok := self.sessions[id]
       if !ok {
@@ -100,7 +100,7 @@ func (self *Comm) provideMessage(msg Message) {
   }
 }
 
-func (self *Comm) NewSession(id int64) (*Session) {
+func (self *Comm) NewSession(id int64, data []byte) (*Session) {
   isNew := false
   if id <= int64(0) {
     isNew = true
@@ -111,7 +111,7 @@ func (self *Comm) NewSession(id int64) (*Session) {
     comm: self,
   }
   if isNew {
-    self.sendQueue <- session.constructPacket(typeConnect, []byte{})
+    self.sendQueue <- session.constructPacket(typeConnect, data)
   }
   self.sessions[id] = session
   return session

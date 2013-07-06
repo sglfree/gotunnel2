@@ -26,12 +26,11 @@ func TestSession(t *testing.T) {
   if err != nil { t.Fatal(err) }
   <-ready
 
-  comm1, err := NewComm(conn1)
-  if err != nil { t.Fatal(err) }
-  comm2, err := NewComm(conn2)
-  if err != nil { t.Fatal(err) }
+  comm1 := NewComm(conn1)
+  comm2 := NewComm(conn2)
 
-  session1 := comm1.NewSession(0)
+  greeting := []byte("hello")
+  session1 := comm1.NewSession(0, greeting)
   id1 := session1.Id
 
   var msg Message
@@ -40,7 +39,7 @@ func TestSession(t *testing.T) {
   case <-time.After(time.Second * 1):
     t.Fatal("message timeout")
   }
-  if msg.Type != SESSION || msg.Session.Id != id1 {
+  if msg.Type != SESSION || msg.Session.Id != id1 || bytes.Compare(msg.Data, greeting) != 0 {
     t.Fatal("message not match")
   }
 
