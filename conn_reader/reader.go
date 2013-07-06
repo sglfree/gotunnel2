@@ -18,11 +18,6 @@ type ConnReader struct {
   Messages *ic.InfiniteChan
 }
 
-type Info struct {
-  TCPConn *net.TCPConn
-  Id int64
-}
-
 const (
   DATA = iota
   EOF
@@ -30,9 +25,9 @@ const (
 )
 
 type Message struct {
-  Info *Info
   Type int
   Data []byte
+  Obj interface{}
 }
 
 func New() *ConnReader {
@@ -45,30 +40,22 @@ func (self *ConnReader) Close() {
   self.Messages.Close()
 }
 
-func (self *ConnReader) Add(tcpConn *net.TCPConn, id int64) *Info {
-  if id < int64(0) {
-    id = rand.Int63()
-  }
-  info := &Info{
-    TCPConn: tcpConn,
-    Id: id,
-  }
+func (self *ConnReader) Add(tcpConn *net.TCPConn, obj interface{}) {
   go func() {
     for {
       buf := make([]byte, BUFFER_SIZE)
       n, err := tcpConn.Read(buf)
       if n > 0 {
-        self.Messages.In <- Message{info, DATA, buf[:n]}
+        self.Messages.In <- Message{DATA, buf[:n], obj}
       }
       if err != nil {
         if err == io.EOF { //EOF
-          self.Messages.In <- Message{info, EOF, nil}
+          self.Messages.In <- Message{EOF, nil, obj}
         } else { //ERROR
-          self.Messages.In <- Message{info, ERROR, []byte(err.Error())}
+          self.Messages.In <- Message{ERROR, []byte(err.Error()), obj}
         }
         return
       }
     }
   }()
-  return info
 }

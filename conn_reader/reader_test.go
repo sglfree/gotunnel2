@@ -6,11 +6,15 @@ import (
   "fmt"
 )
 
+type objT struct {
+  magic string
+  conn *net.TCPConn
+}
+
 func TestConnReader(t *testing.T) {
   reader := New()
   addr, _ := net.ResolveTCPAddr("tcp", "localhost:54322")
   ready := make(chan struct{})
-  infos := make(map[int64]int)
   go func() {
     ln, err := net.ListenTCP("tcp", addr)
     if err != nil { t.Fatal(err) }
@@ -18,8 +22,7 @@ func TestConnReader(t *testing.T) {
     for {
       conn, err := ln.AcceptTCP()
       if err != nil { t.Fatal(err) }
-      info := reader.Add(conn)
-      infos[info.Id] = 0
+      reader.Add(conn, objT{"hello", conn})
     }
   }()
   <-ready
@@ -33,12 +36,13 @@ func TestConnReader(t *testing.T) {
   received := 0
   for {
     msg := (<-reader.Messages.Out).(Message)
+    obj := msg.Obj.(objT)
+    if obj.magic != "hello" { t.Fatal("magic not match") }
     switch msg.Type {
     case DATA:
-      fmt.Printf("%d %s\n", msg.Info.Id, msg.Data)
-      infos[msg.Info.Id] += 1
+      fmt.Printf("%s %s\n", obj.magic, msg.Data)
     case EOF:
-      msg.Info.TCPConn.Close()
+      obj.conn.Close()
       received += 1
     case ERROR:
       t.Fatal(msg.Data)
