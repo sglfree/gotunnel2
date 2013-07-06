@@ -5,9 +5,9 @@ import (
   "math/rand"
   "time"
   "encoding/binary"
-  "log"
   "io"
   "fmt"
+  ic "../infinite_chan"
 )
 
 func init() {
@@ -30,16 +30,16 @@ type Message struct {
 type Comm struct {
   conn *net.TCPConn
   sessions map[int64]*Session
-  sendQueue chan []byte
-  Messages chan Message
+  sendQueue *ic.InfiniteChan
+  Messages *ic.InfiniteChan
 }
 
 func NewComm(conn *net.TCPConn) (*Comm) {
   c := &Comm{
     conn: conn,
     sessions: make(map[int64]*Session),
-    sendQueue: make(chan []byte),
-    Messages: make(chan Message),
+    sendQueue: ic.New(),
+    Messages: ic.New(),
   }
   go c.startSender()
   go c.startReader()
@@ -48,7 +48,8 @@ func NewComm(conn *net.TCPConn) (*Comm) {
 
 func (self *Comm) startSender() {
   for {
-    data := <-self.sendQueue
+    dataI := <-self.sendQueue.Out
+    data := dataI.([]byte)
     self.conn.Write(data)
   }
 }
@@ -93,11 +94,7 @@ func (self *Comm) startReader() {
 }
 
 func (self *Comm) provideMessage(msg Message) {
-  select {
-  case self.Messages <- msg:
-  case <-time.After(time.Second * 5):
-    log.Fatal("no one is reading the message, check your code!")
-  }
+  self.Messages.In <- msg
 }
 
 func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) {
@@ -112,7 +109,7 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
     Obj: obj,
   }
   if isNew {
-    self.sendQueue <- session.constructPacket(typeConnect, data)
+    self.sendQueue.In <- session.constructPacket(typeConnect, data)
   }
   self.sessions[id] = session
   return session

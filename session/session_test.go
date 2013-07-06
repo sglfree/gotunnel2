@@ -35,7 +35,8 @@ func TestSession(t *testing.T) {
 
   var msg Message
   select {
-  case msg = <-comm2.Messages:
+  case msgI := <-comm2.Messages.Out:
+    msg = msgI.(Message)
   case <-time.After(time.Second * 1):
     t.Fatal("message timeout")
   }
@@ -47,7 +48,8 @@ func TestSession(t *testing.T) {
     s := []byte(fmt.Sprintf("Hello, %d world!", i))
     session1.Send(s)
     select {
-    case msg = <-comm2.Messages:
+    case msgI := <-comm2.Messages.Out:
+      msg = msgI.(Message)
     case <-time.After(time.Second * 1):
       t.Fatal("message timeout again")
     }
@@ -61,7 +63,8 @@ func TestSession(t *testing.T) {
 
   session1.Close()
   select {
-  case msg = <-comm2.Messages:
+  case msgI := <-comm2.Messages.Out:
+    msg = msgI.(Message)
   case <-time.After(time.Second * 1):
     t.Fatal("message timeout here")
   }

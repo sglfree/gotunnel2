@@ -24,11 +24,11 @@ func (self *Session) constructPacket(t uint8, data []byte) []byte {
 }
 
 func (self *Session) Send(data []byte) {
-  self.comm.sendQueue <- self.constructPacket(typeData, data)
+  self.comm.sendQueue.In <- self.constructPacket(typeData, data)
 }
 
 func (self *Session) Close() {
-  self.comm.sendQueue <- self.constructPacket(typeClose, []byte{})
+  self.comm.sendQueue.In <- self.constructPacket(typeClose, []byte{})
   go func() {
     <-time.After(time.Second * SESSION_CLEANNING_TIMEOUT)
     delete(self.comm.sessions, self.Id)
