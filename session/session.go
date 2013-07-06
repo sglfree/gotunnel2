@@ -11,6 +11,7 @@ const SESSION_CLEANNING_TIMEOUT = 60
 type Session struct {
   Id int64
   comm *Comm
+  Obj interface{}
 }
 
 func (self *Session) constructPacket(t uint8, data []byte) []byte {

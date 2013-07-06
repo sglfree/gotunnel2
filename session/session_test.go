@@ -30,7 +30,7 @@ func TestSession(t *testing.T) {
   comm2 := NewComm(conn2)
 
   greeting := []byte("hello")
-  session1 := comm1.NewSession(0, greeting)
+  session1 := comm1.NewSession(0, greeting, nil)
   id1 := session1.Id
 
   var msg Message

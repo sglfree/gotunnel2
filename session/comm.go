@@ -69,7 +69,7 @@ func (self *Comm) startReader() {
     }
     switch t {
     case typeConnect:
-      session := self.NewSession(id, nil)
+      session := self.NewSession(id, nil, nil)
       self.provideMessage(Message{Type: SESSION, Session: session, Data: data})
     case typeData:
       session, ok := self.sessions[id]
@@ -100,7 +100,7 @@ func (self *Comm) provideMessage(msg Message) {
   }
 }
 
-func (self *Comm) NewSession(id int64, data []byte) (*Session) {
+func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) {
   isNew := false
   if id <= int64(0) {
     isNew = true
@@ -109,6 +109,7 @@ func (self *Comm) NewSession(id int64, data []byte) (*Session) {
   session := &Session{
     Id: id,
     comm: self,
+    Obj: obj,
   }
   if isNew {
     self.sendQueue <- session.constructPacket(typeConnect, data)
