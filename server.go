@@ -6,8 +6,11 @@ import (
   "fmt"
   cr "./conn_reader"
   ic "./infinite_chan"
+  "./session"
+  "time"
 )
 
+// configuration
 var defaultConfig = map[string]string{
   "listen": "0.0.0.0:34567",
 }
@@ -19,7 +22,6 @@ func checkConfig(key string) {
     globalConfig = loadConfig(defaultConfig)
   }
 }
-
 func init() {
   checkConfig("listen")
 }
@@ -37,70 +39,66 @@ func main() {
   }
 }
 
+type Session struct {
+  session *session.Session
+  sendQueue *ic.InfiniteChan
+  targetConn *net.TCPConn
+}
+
 func handleClient(conn *net.TCPConn) {
   defer conn.Close()
 
   targetReader := cr.New()
-  sessions := make(map[int64]*Session)
-  remoteMessages := startRemoteReader(sessions, conn)
+  comm := session.NewComm(conn)
 
-  loop: for {
-    select {
-    case msgI := <-targetReader.Messages.Out:
-      msg := msgI.(cr.Message)
-      session, ok := sessions[msg.Info.Id]
-      if !ok { continue loop }
-      switch msg.Type {
-      case cr.DATA:
-        session.Write(msg.Data)
-        session.log("target >>", fmt.Sprintf("%6d", len(msg.Data)), ">> remote")
-      case cr.EOF, cr.ERROR:
-        session.log("target >> EOF")
-        session.WriteHeader(EOF)
-        session.localClosed = true
-        if session.remoteClosed {
-          if session.SendQueue != nil {
-            session.SendQueue.Close()
-          }
-          delete(sessions, session.Id)
-          session.log("cleared")
-        }
+  loop: for { select {
+  // messages from local 
+  case msg := <-comm.Messages:
+    switch msg.Type {
+    case session.SESSION: // new local session
+      session := &Session{
+        sendQueue: ic.New(),
       }
-    case msgI := <-remoteMessages.Out:
-      msg := msgI.(Message)
-      switch msg.Type {
-      case CONNECT:
-        session := msg.Session
-        addr, err := net.ResolveTCPAddr("tcp", session.HostPort)
-        if err != nil {
-          session.log("cannot resolve addr", session.HostPort, err)
-          continue loop
+      session.session = comm.NewSession(msg.Session.Id, nil, session)
+      go func() {
+        addr, err := net.ResolveTCPAddr("tcp", string(msg.Data))
+        hostError := false
+        if err != nil { hostError = true }
+        targetConn, err := net.DialTCP("tcp", nil, addr)
+        if err != nil { hostError = true }
+        if !hostError {
+          targetReader.Add(targetConn, session)
+          session.targetConn = targetConn
         }
-        session.SendQueue = ic.New()
-        go func() {
-          targetConn, err := net.DialTCP("tcp", nil, addr)
-          if err != nil {
-            session.log("cannot connect to host", session.HostPort, err)
-            return
-          }
-          targetReader.Add(targetConn, session.Id)
-          session.LocalConn = targetConn
-          session.log("connected to target host", session.HostPort)
-          for {
-            data := (<-session.SendQueue.Out).([]byte)
-            session.LocalConn.Write(data)
-          }
-        }()
-      case DATA:
-        msg.Session.SendQueue.In <- msg.Data
-        msg.Session.log("remote >>", fmt.Sprintf("%6d", len(msg.Data)), ">> target")
-      case ERROR:
-        break loop
-      default:
-        log.Fatal("not here")
-      }
+        for {
+          data := (<-session.sendQueue.Out).([]byte)
+          if !hostError { targetConn.Write(data) }
+        }
+      }()
+    case session.DATA: // local data
+      msg.Session.Obj.(*Session).sendQueue.In <- msg.Data
+    case session.CLOSE: // local session closed
+      msg.Session.Close()
+      defer func() {
+        targetConn := msg.Session.Obj.(*Session).targetConn
+        if targetConn != nil {
+          <-time.After(time.Second * 5)
+          targetConn.Close()
+        }
+      }()
+    case session.ERROR: // error
+      break loop
     }
-  }
-
-  fmt.Printf("client disconnected\n")
+  // messages from target host
+  case msgI := <-targetReader.Messages.Out:
+    msg := msgI.(cr.Message)
+    session := msg.Obj.(*Session)
+    switch msg.Type {
+    case cr.DATA:
+      session.session.Send(msg.Data)
+    case cr.EOF, cr.ERROR:
+      session.session.Close()
+      session.sendQueue.Close()
+    }
+  }}
 }
