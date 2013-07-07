@@ -35,7 +35,7 @@ func TestConnReader(t *testing.T) {
   }
   received := 0
   for {
-    ev := (<-reader.Events.Out).(Event)
+    ev := <-reader.Events
     obj := ev.Obj.(objT)
     if obj.magic != "hello" { t.Fatal("magic not match") }
     switch ev.Type {

@@ -2,7 +2,6 @@ package conn_reader
 
 import (
   "net"
-  ic "../infinite_chan"
   "math/rand"
   "time"
   "io"
@@ -15,7 +14,7 @@ func init() {
 }
 
 type ConnReader struct {
-  Events *ic.InfiniteChan
+  Events chan Event
 }
 
 const (
@@ -32,12 +31,8 @@ type Event struct {
 
 func New() *ConnReader {
   self := new(ConnReader)
-  self.Events = ic.New()
+  self.Events = make(chan Event, 65536)
   return self
-}
-
-func (self *ConnReader) Close() {
-  self.Events.Close()
 }
 
 func (self *ConnReader) Add(tcpConn *net.TCPConn, obj interface{}) {
@@ -46,13 +41,13 @@ func (self *ConnReader) Add(tcpConn *net.TCPConn, obj interface{}) {
       buf := make([]byte, BUFFER_SIZE)
       n, err := tcpConn.Read(buf)
       if n > 0 {
-        self.Events.In <- Event{DATA, buf[:n], obj}
+        self.Events <- Event{DATA, buf[:n], obj}
       }
       if err != nil {
         if err == io.EOF { //EOF
-          self.Events.In <- Event{EOF, nil, obj}
+          self.Events <- Event{EOF, nil, obj}
         } else { //ERROR
-          self.Events.In <- Event{ERROR, []byte(err.Error()), obj}
+          self.Events <- Event{ERROR, []byte(err.Error()), obj}
         }
         return
       }
