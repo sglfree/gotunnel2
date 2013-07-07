@@ -60,31 +60,32 @@ func main() {
       socksClient.Conn,
     }
     clientReader.Add(socksClient.Conn, session)
-  // message from client
-  case msgI := <-clientReader.Messages.Out:
-    msg := msgI.(cr.Message)
-    session := msg.Obj.(*Session)
-    switch msg.Type {
+  // client events
+  case evI := <-clientReader.Events.Out:
+    ev := evI.(cr.Event)
+    session := ev.Obj.(*Session)
+    switch ev.Type {
     case cr.DATA: // client data
-      session.Send(msg.Data)
+      session.Send(ev.Data)
     case cr.EOF, cr.ERROR: // client close
       session.Close()
     }
-  // messages from server
-  case msg := <-comm.Messages:
-    switch msg.Type {
+  // server events
+  case evI := <-comm.Events.Out:
+    ev := evI.(session.Event)
+    switch ev.Type {
     case session.SESSION:
-      log.Fatal("local should not have received this type of message")
+      log.Fatal("local should not have received this type of event")
     case session.DATA:
-      msg.Session.Obj.(*net.TCPConn).Write(msg.Data)
+      ev.Session.Obj.(*net.TCPConn).Write(ev.Data)
     case session.CLOSE:
-      msg.Session.Close()
+      ev.Session.Close()
       defer func() {
         <-time.After(time.Second * 5)
-        msg.Session.Obj.(*net.TCPConn).Close()
+        ev.Session.Obj.(*net.TCPConn).Close()
       }()
     case session.ERROR:
-      log.Fatal("error when communicating with server ", msg.Data)
+      log.Fatal("error when communicating with server ", ev.Data)
     }
   }}
 }
