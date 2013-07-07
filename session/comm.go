@@ -7,7 +7,6 @@ import (
   "encoding/binary"
   "io"
   "fmt"
-  ic "../infinite_chan"
 )
 
 func init() {
@@ -30,16 +29,16 @@ type Event struct {
 type Comm struct {
   conn *net.TCPConn
   sessions map[int64]*Session
-  sendQueue *ic.InfiniteChan
-  Events *ic.InfiniteChan
+  sendQueue chan []byte
+  Events chan Event
 }
 
 func NewComm(conn *net.TCPConn) (*Comm) {
   c := &Comm{
     conn: conn,
     sessions: make(map[int64]*Session),
-    sendQueue: ic.New(),
-    Events: ic.New(),
+    sendQueue: make(chan []byte, 65536),
+    Events: make(chan Event, 65536),
   }
   go c.startSender()
   go c.startReader()
@@ -48,9 +47,7 @@ func NewComm(conn *net.TCPConn) (*Comm) {
 
 func (self *Comm) startSender() {
   for {
-    dataI := <-self.sendQueue.Out
-    data := dataI.([]byte)
-    self.conn.Write(data)
+    self.conn.Write(<-self.sendQueue)
   }
 }
 
@@ -94,7 +91,7 @@ func (self *Comm) startReader() {
 }
 
 func (self *Comm) emit(ev Event) {
-  self.Events.In <- ev
+  self.Events <- ev
 }
 
 func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) {
@@ -109,7 +106,7 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
     Obj: obj,
   }
   if isNew {
-    self.sendQueue.In <- session.constructPacket(typeConnect, data)
+    self.sendQueue <- session.constructPacket(typeConnect, data)
   }
   self.sessions[id] = session
   return session
