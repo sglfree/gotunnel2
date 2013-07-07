@@ -7,25 +7,24 @@ import (
   "strings"
   "encoding/binary"
   "bytes"
-  ic "../infinite_chan"
   "strconv"
 )
 
 type Server struct {
   ln *net.TCPListener
   isStopped bool
-  Clients *ic.InfiniteChan
+  Clients chan *Client
 }
 
 func (self *Server) Close() {
   self.isStopped = true
   self.ln.Close()
-  self.Clients.Close()
 }
 
 func New(listenAddr string) (*Server, error) {
-  server := new(Server)
-  server.Clients = ic.New()
+  server := &Server{
+    Clients: make(chan *Client, 65536),
+  }
   addr, err := net.ResolveTCPAddr("tcp", listenAddr)
   if err != nil { return nil, server.newError(err) }
   ln, err := net.ListenTCP("tcp", addr)
@@ -136,7 +135,7 @@ func (self *Server) handshake(conn *net.TCPConn) error {
     Conn: conn,
     HostPort: hostPort,
   }
-  self.Clients.In <- client
+  self.Clients <- client
 
   return nil
 }

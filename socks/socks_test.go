@@ -14,8 +14,7 @@ func TestSocks(t *testing.T) {
   defer server.Close()
   for {
     select {
-    case clientI := <-server.Clients.Out:
-      client := clientI.(*Client)
+    case client := <-server.Clients:
       fmt.Printf("%s\n", client)
     case <-time.After(time.Second * 1):
       return
