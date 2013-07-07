@@ -33,42 +33,42 @@ func TestSession(t *testing.T) {
   session1 := comm1.NewSession(0, greeting, nil)
   id1 := session1.Id
 
-  var msg Message
+  var ev Event
   select {
-  case msgI := <-comm2.Messages.Out:
-    msg = msgI.(Message)
+  case evI := <-comm2.Events.Out:
+    ev = evI.(Event)
   case <-time.After(time.Second * 1):
-    t.Fatal("message timeout")
+    t.Fatal("event timeout")
   }
-  if msg.Type != SESSION || msg.Session.Id != id1 || bytes.Compare(msg.Data, greeting) != 0 {
-    t.Fatal("message not match")
+  if ev.Type != SESSION || ev.Session.Id != id1 || bytes.Compare(ev.Data, greeting) != 0 {
+    t.Fatal("event not match")
   }
 
   for i := 0; i < 1024; i++ {
     s := []byte(fmt.Sprintf("Hello, %d world!", i))
     session1.Send(s)
     select {
-    case msgI := <-comm2.Messages.Out:
-      msg = msgI.(Message)
+    case evI := <-comm2.Events.Out:
+      ev = evI.(Event)
     case <-time.After(time.Second * 1):
-      t.Fatal("message timeout again")
+      t.Fatal("event timeout again")
     }
-    if msg.Type != DATA || msg.Session.Id != id1 {
-      t.Fatal("message not match again")
+    if ev.Type != DATA || ev.Session.Id != id1 {
+      t.Fatal("event not match again")
     }
-    if bytes.Compare(s, msg.Data) != 0 {
+    if bytes.Compare(s, ev.Data) != 0 {
       t.Fatal("data not match")
     }
   }
 
   session1.Close()
   select {
-  case msgI := <-comm2.Messages.Out:
-    msg = msgI.(Message)
+  case evI := <-comm2.Events.Out:
+    ev = evI.(Event)
   case <-time.After(time.Second * 1):
-    t.Fatal("message timeout here")
+    t.Fatal("event timeout here")
   }
-  if msg.Type != CLOSE || msg.Session.Id != id1 {
-    t.Fatal("message not match here")
+  if ev.Type != CLOSE || ev.Session.Id != id1 {
+    t.Fatal("event not match here")
   }
 }

@@ -21,7 +21,7 @@ const (
   ERROR
 )
 
-type Message struct {
+type Event struct {
   Type int
   Session *Session
   Data []byte
@@ -31,7 +31,7 @@ type Comm struct {
   conn *net.TCPConn
   sessions map[int64]*Session
   sendQueue *ic.InfiniteChan
-  Messages *ic.InfiniteChan
+  Events *ic.InfiniteChan
 }
 
 func NewComm(conn *net.TCPConn) (*Comm) {
@@ -39,7 +39,7 @@ func NewComm(conn *net.TCPConn) (*Comm) {
     conn: conn,
     sessions: make(map[int64]*Session),
     sendQueue: ic.New(),
-    Messages: ic.New(),
+    Events: ic.New(),
   }
   go c.startSender()
   go c.startReader()
@@ -65,36 +65,36 @@ func (self *Comm) startReader() {
     data := make([]byte, dataLen)
     n, err := io.ReadFull(self.conn, data)
     if err != nil || uint32(n) != dataLen {
-      self.provideMessage(Message{Type: ERROR, Data: []byte("error occurred when reading data")})
+      self.emit(Event{Type: ERROR, Data: []byte("error occurred when reading data")})
       return
     }
     switch t {
     case typeConnect:
       session := self.NewSession(id, nil, nil)
-      self.provideMessage(Message{Type: SESSION, Session: session, Data: data})
+      self.emit(Event{Type: SESSION, Session: session, Data: data})
     case typeData:
       session, ok := self.sessions[id]
       if !ok {
-        self.provideMessage(Message{Type: ERROR, Session: &Session{Id: id}, Data: []byte("unregistered session id")})
+        self.emit(Event{Type: ERROR, Session: &Session{Id: id}, Data: []byte("unregistered session id")})
         return
       }
-      self.provideMessage(Message{Type: DATA, Session: session, Data: data})
+      self.emit(Event{Type: DATA, Session: session, Data: data})
     case typeClose:
       session, ok := self.sessions[id]
       if !ok {
-        self.provideMessage(Message{Type: ERROR, Session: &Session{Id: id}, Data: []byte("unregistered session id")})
+        self.emit(Event{Type: ERROR, Session: &Session{Id: id}, Data: []byte("unregistered session id")})
         return
       }
-      self.provideMessage(Message{Type: CLOSE, Session: session})
+      self.emit(Event{Type: CLOSE, Session: session})
     default:
-      self.provideMessage(Message{Type: ERROR, Data: []byte(fmt.Sprintf("unrecognized packet type %s", t))})
+      self.emit(Event{Type: ERROR, Data: []byte(fmt.Sprintf("unrecognized packet type %s", t))})
       return
     }
   }
 }
 
-func (self *Comm) provideMessage(msg Message) {
-  self.Messages.In <- msg
+func (self *Comm) emit(ev Event) {
+  self.Events.In <- ev
 }
 
 func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) {
