@@ -35,17 +35,17 @@ func TestConnReader(t *testing.T) {
   }
   received := 0
   for {
-    msg := (<-reader.Messages.Out).(Message)
-    obj := msg.Obj.(objT)
+    ev := (<-reader.Events.Out).(Event)
+    obj := ev.Obj.(objT)
     if obj.magic != "hello" { t.Fatal("magic not match") }
-    switch msg.Type {
+    switch ev.Type {
     case DATA:
-      fmt.Printf("%s %s\n", obj.magic, msg.Data)
+      fmt.Printf("%s %s\n", obj.magic, ev.Data)
     case EOF:
       obj.conn.Close()
       received += 1
     case ERROR:
-      t.Fatal(msg.Data)
+      t.Fatal(ev.Data)
     }
     if received == n {
       break

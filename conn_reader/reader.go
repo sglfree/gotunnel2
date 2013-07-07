@@ -15,7 +15,7 @@ func init() {
 }
 
 type ConnReader struct {
-  Messages *ic.InfiniteChan
+  Events *ic.InfiniteChan
 }
 
 const (
@@ -24,7 +24,7 @@ const (
   ERROR
 )
 
-type Message struct {
+type Event struct {
   Type int
   Data []byte
   Obj interface{}
@@ -32,12 +32,12 @@ type Message struct {
 
 func New() *ConnReader {
   self := new(ConnReader)
-  self.Messages = ic.New()
+  self.Events = ic.New()
   return self
 }
 
 func (self *ConnReader) Close() {
-  self.Messages.Close()
+  self.Events.Close()
 }
 
 func (self *ConnReader) Add(tcpConn *net.TCPConn, obj interface{}) {
@@ -46,13 +46,13 @@ func (self *ConnReader) Add(tcpConn *net.TCPConn, obj interface{}) {
       buf := make([]byte, BUFFER_SIZE)
       n, err := tcpConn.Read(buf)
       if n > 0 {
-        self.Messages.In <- Message{DATA, buf[:n], obj}
+        self.Events.In <- Event{DATA, buf[:n], obj}
       }
       if err != nil {
         if err == io.EOF { //EOF
-          self.Messages.In <- Message{EOF, nil, obj}
+          self.Events.In <- Event{EOF, nil, obj}
         } else { //ERROR
-          self.Messages.In <- Message{ERROR, []byte(err.Error()), obj}
+          self.Events.In <- Event{ERROR, []byte(err.Error()), obj}
         }
         return
       }
