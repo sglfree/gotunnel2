@@ -43,7 +43,7 @@ func TestSession(t *testing.T) {
     t.Fatal("event not match")
   }
 
-  for i := 0; i < 1024; i++ {
+  for i := 0; i < 10240; i++ {
     s := []byte(fmt.Sprintf("Hello, %d world!", i))
     session1.Send(s)
     select {
@@ -59,13 +59,14 @@ func TestSession(t *testing.T) {
     }
   }
 
-  session1.Close()
+  sigClose := uint8(0)
+  session1.Signal(sigClose)
   select {
   case ev = <-comm2.Events:
   case <-time.After(time.Second * 1):
     t.Fatal("event timeout here")
   }
-  if ev.Type != CLOSE || ev.Session.Id != id1 {
+  if ev.Type != SIGNAL || ev.Session.Id != id1 || ev.Data[0] != sigClose {
     t.Fatal("event not match here")
   }
 }

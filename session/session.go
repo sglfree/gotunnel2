@@ -3,10 +3,7 @@ package session
 import (
   "encoding/binary"
   "bytes"
-  "time"
 )
-
-const SESSION_CLEANNING_TIMEOUT = 60
 
 type Session struct {
   Id int64
@@ -27,10 +24,10 @@ func (self *Session) Send(data []byte) {
   self.comm.sendQueue <- self.constructPacket(typeData, data)
 }
 
+func (self *Session) Signal(sig uint8) {
+  self.comm.sendQueue <- self.constructPacket(typeSignal, []byte{sig})
+}
+
 func (self *Session) Close() {
-  self.comm.sendQueue <- self.constructPacket(typeClose, []byte{})
-  go func() {
-    <-time.After(time.Second * SESSION_CLEANNING_TIMEOUT)
-    delete(self.comm.sessions, self.Id)
-  }()
+  delete(self.comm.sessions, self.Id)
 }

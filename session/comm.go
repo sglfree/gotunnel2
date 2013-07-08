@@ -16,7 +16,7 @@ func init() {
 const (
   SESSION = iota
   DATA
-  CLOSE
+  SIGNAL
   ERROR
 )
 
@@ -76,13 +76,13 @@ func (self *Comm) startReader() {
         return
       }
       self.emit(Event{Type: DATA, Session: session, Data: data})
-    case typeClose:
+    case typeSignal:
       session, ok := self.sessions[id]
       if !ok {
         self.emit(Event{Type: ERROR, Session: &Session{Id: id}, Data: []byte("unregistered session id")})
         return
       }
-      self.emit(Event{Type: CLOSE, Session: session})
+      self.emit(Event{Type: SIGNAL, Session: session, Data: data})
     default:
       self.emit(Event{Type: ERROR, Data: []byte(fmt.Sprintf("unrecognized packet type %s", t))})
       return
