@@ -37,6 +37,11 @@ type Serv struct {
 }
 
 func main() {
+  t1 := time.Now()
+  delta := func() string {
+    return fmt.Sprintf("%-15v", time.Now().Sub(t1))
+  }
+
   // socks5 server
   socksServer, err := socks.New(globalConfig["local"])
   if err != nil {
@@ -62,6 +67,7 @@ func main() {
   // keepalive
   case <-keepaliveTicker.C:
     keepaliveSession.Signal(sigPing)
+    fmt.Printf("%s ping\n", delta())
   // new socks client
   case socksClient := <-socksServer.Clients:
     serv := &Serv{

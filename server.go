@@ -50,6 +50,11 @@ type Serv struct {
 func handleClient(conn *net.TCPConn) {
   defer conn.Close()
 
+  t1 := time.Now()
+  delta := func() string {
+    return fmt.Sprintf("%-15v", time.Now().Sub(t1))
+  }
+
   targetReader := cr.New()
   comm := session.NewComm(conn)
   targetConnEvents := make(chan *Serv, 65536)
@@ -100,7 +105,7 @@ func handleClient(conn *net.TCPConn) {
         serv.remoteClosed = true
         if serv.localClosed { serv.session.Close() }
       } else if sig == sigPing {
-        //fmt.Printf("pong\n")
+        fmt.Printf("%s pong\n", delta())
       }
     case session.ERROR: // error
       break loop
