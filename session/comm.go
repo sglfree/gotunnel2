@@ -34,7 +34,6 @@ type Comm struct {
 }
 
 func NewComm(conn *net.TCPConn) (*Comm) {
-  conn.SetKeepAlive(true)
   c := &Comm{
     conn: conn,
     sessions: make(map[int64]*Session),
