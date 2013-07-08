@@ -5,7 +5,6 @@ import (
   "log"
   "fmt"
   cr "./conn_reader"
-  ic "./infinite_chan"
   "./session"
   "time"
 )
@@ -39,82 +38,97 @@ func main() {
   }
 }
 
-type Session struct {
+type Serv struct {
   session *session.Session
-  sendQueue *ic.InfiniteChan
+  sendQueue chan []byte
   targetConn *net.TCPConn
   hostPort string
+  localClosed bool
+  remoteClosed bool
 }
+
+const sigClose = uint8(0)
 
 func handleClient(conn *net.TCPConn) {
   defer conn.Close()
 
   targetReader := cr.New()
   comm := session.NewComm(conn)
-  targetConnEvents := ic.New()
-  connectTarget := func(session *Session) {
+  targetConnEvents := make(chan *Serv, 65536)
+  connectTarget := func(serv *Serv) {
     defer func() {
-      targetConnEvents.In <- session
+      targetConnEvents <- serv
     }()
-    addr, err := net.ResolveTCPAddr("tcp", session.hostPort)
+    addr, err := net.ResolveTCPAddr("tcp", serv.hostPort)
     if err != nil { return }
     targetConn, err := net.DialTCP("tcp", nil, addr)
     if err != nil { return }
-    targetReader.Add(targetConn, session)
-    session.targetConn = targetConn
+    targetReader.Add(targetConn, serv)
+    serv.targetConn = targetConn
+    fmt.Printf("target connected %s\n", serv.hostPort)
     return
   }
 
   loop: for { select {
   // local-side events
-  case evI := <-comm.Events.Out:
-    ev := evI.(session.Event)
+  case ev := <-comm.Events:
     switch ev.Type {
     case session.SESSION: // new local session
-      session := &Session{
-        sendQueue: ic.New(),
+      serv := &Serv{
+        sendQueue: make(chan []byte, 65536),
         hostPort: string(ev.Data),
       }
-      session.session = comm.NewSession(ev.Session.Id, nil, session)
-      go connectTarget(session)
+      fmt.Printf("new session %s\n", serv.hostPort)
+      serv.session = ev.Session
+      ev.Session.Obj = serv
+      go connectTarget(serv)
     case session.DATA: // local data
-      session := ev.Session.Obj.(*Session)
-      if session.targetConn == nil {
-        session.sendQueue.In <- ev.Data
+      serv := ev.Session.Obj.(*Serv)
+      fmt.Printf("%d data, %s\n", len(ev.Data), serv.hostPort)
+      if serv.targetConn == nil {
+        serv.sendQueue <- ev.Data
+        fmt.Printf("enqueue\n")
       } else {
-        session.targetConn.Write(ev.Data)
+        serv.targetConn.Write(ev.Data)
+        fmt.Printf("sent\n")
       }
-    case session.CLOSE: // local session closed
-      ev.Session.Close()
-      defer func() {
-        targetConn := ev.Session.Obj.(*Session).targetConn
-        if targetConn != nil {
-          <-time.After(time.Second * 5)
-          targetConn.Close()
+    case session.SIGNAL: // local session closed
+      if ev.Data[0] == sigClose {
+        serv := ev.Session.Obj.(*Serv)
+        if serv.targetConn != nil {
+          go func() {
+            <-time.After(time.Second * 5)
+            serv.targetConn.Close()
+          }()
         }
-      }()
+        serv.remoteClosed = true
+        if serv.localClosed { serv.session.Close() }
+      }
     case session.ERROR: // error
       break loop
     }
   // target connection events
-  case sessionI := <-targetConnEvents.Out:
-    session := sessionI.(*Session)
+  case serv := <-targetConnEvents:
+    fmt.Printf("target ready, %s\n", serv.hostPort)
     readQueue: for { select {
-    case dataI := <-session.sendQueue.Out:
-      data := dataI.([]byte)
-      session.targetConn.Write(data)
+    case data := <-serv.sendQueue:
+      serv.targetConn.Write(data)
+      fmt.Printf("sent %d bytes\n", len(data))
     default: break readQueue
     }}
+    fmt.Printf("queue sent, %s\n", serv.hostPort)
   // target events
-  case evI := <-targetReader.Events.Out:
-    ev := evI.(cr.Event)
-    session := ev.Obj.(*Session)
+  case ev := <-targetReader.Events:
+    serv := ev.Obj.(*Serv)
     switch ev.Type {
     case cr.DATA:
-      session.session.Send(ev.Data)
+      fmt.Printf("receive %d bytes from %s\n", len(ev.Data), serv.hostPort)
+      serv.session.Send(ev.Data)
     case cr.EOF, cr.ERROR:
-      session.session.Close()
-      session.sendQueue.Close()
+      serv.session.Signal(sigClose)
+      serv.localClosed = true
+      if serv.remoteClosed { serv.session.Close() }
     }
+  goto loop
   }}
 }

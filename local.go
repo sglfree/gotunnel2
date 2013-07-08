@@ -28,10 +28,15 @@ func init() {
   checkConfig("remote")
 }
 
-type Session struct {
-  *session.Session
+type Serv struct {
+  session *session.Session
   clientConn *net.TCPConn
+  hostPort string
+  localClosed bool
+  remoteClosed bool
 }
+
+const sigClose = uint8(0)
 
 func main() {
   // socks5 server
@@ -53,39 +58,46 @@ func main() {
 
   for { select {
   // new socks client
-  case socksClientI := <-socksServer.Clients.Out:
-    socksClient := socksClientI.(*socks.Client)
-    session := &Session{
-      comm.NewSession(-1, []byte(socksClient.HostPort), socksClient.Conn),
-      socksClient.Conn,
+  case socksClient := <-socksServer.Clients:
+    serv := &Serv{
+      clientConn: socksClient.Conn,
+      hostPort: socksClient.HostPort,
     }
-    clientReader.Add(socksClient.Conn, session)
+    serv.session = comm.NewSession(-1, []byte(socksClient.HostPort), serv)
+    clientReader.Add(socksClient.Conn, serv)
+    fmt.Printf("new client %s\n", socksClient.HostPort)
   // client events
-  case evI := <-clientReader.Events.Out:
-    ev := evI.(cr.Event)
-    session := ev.Obj.(*Session)
+  case ev := <-clientReader.Events:
+    serv := ev.Obj.(*Serv)
     switch ev.Type {
     case cr.DATA: // client data
-      session.Send(ev.Data)
+      fmt.Printf("%d data, %s\n", len(ev.Data), serv.hostPort)
+      serv.session.Send(ev.Data)
     case cr.EOF, cr.ERROR: // client close
-      session.Close()
+      serv.session.Signal(sigClose)
+      serv.localClosed = true
+      if serv.remoteClosed { serv.session.Close() }
     }
   // server events
-  case evI := <-comm.Events.Out:
-    ev := evI.(session.Event)
+  case ev := <-comm.Events:
+    serv := ev.Session.Obj.(*Serv)
     switch ev.Type {
     case session.SESSION:
       log.Fatal("local should not have received this type of event")
     case session.DATA:
-      ev.Session.Obj.(*net.TCPConn).Write(ev.Data)
-    case session.CLOSE:
-      ev.Session.Close()
-      defer func() {
-        <-time.After(time.Second * 5)
-        ev.Session.Obj.(*net.TCPConn).Close()
-      }()
+      fmt.Printf("receive %d bytes from target\n", len(ev.Data))
+      serv.clientConn.Write(ev.Data)
+    case session.SIGNAL:
+      if ev.Data[0] == sigClose {
+        go func() {
+          <-time.After(time.Second * 5)
+          serv.clientConn.Close()
+        }()
+        serv.remoteClosed = true
+        if serv.localClosed { serv.session.Close() }
+      }
     case session.ERROR:
-      log.Fatal("error when communicating with server ", ev.Data)
+      log.Fatal("error when communicating with server ", string(ev.Data))
     }
   }}
 }
