@@ -11,7 +11,14 @@ import (
   "os"
 )
 
-const CONFIG_FILENAME = ".gotunnel.conf"
+const (
+  CONFIG_FILENAME = ".gotunnel.conf"
+
+  sigClose = uint8(0)
+  sigPing = uint8(1)
+
+  keepaliveSessionMagic = "I am a keepalive session."
+)
 
 func loadConfig(defaultConf map[string]string) map[string]string {
   currentUser, err := user.Current()

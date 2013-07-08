@@ -1,3 +1,3 @@
 all:
-	go build local.go config.go
-	go build server.go config.go
+	go build local.go common.go
+	go build server.go common.go

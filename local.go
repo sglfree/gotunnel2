@@ -36,8 +36,6 @@ type Serv struct {
   remoteClosed bool
 }
 
-const sigClose = uint8(0)
-
 func main() {
   // socks5 server
   socksServer, err := socks.New(globalConfig["local"])
@@ -56,7 +54,14 @@ func main() {
   fmt.Printf("connected to server %v\n", serverConn.RemoteAddr())
   comm := session.NewComm(serverConn)
 
+  // keepalive
+  keepaliveSession := comm.NewSession(-1, []byte(keepaliveSessionMagic), nil)
+  keepaliveTicker := time.NewTicker(time.Second * 5)
+
   for { select {
+  // keepalive
+  case <-keepaliveTicker.C:
+    keepaliveSession.Signal(sigPing)
   // new socks client
   case socksClient := <-socksServer.Clients:
     serv := &Serv{
@@ -65,13 +70,11 @@ func main() {
     }
     serv.session = comm.NewSession(-1, []byte(socksClient.HostPort), serv)
     clientReader.Add(socksClient.Conn, serv)
-    fmt.Printf("new client %s\n", socksClient.HostPort)
   // client events
   case ev := <-clientReader.Events:
     serv := ev.Obj.(*Serv)
     switch ev.Type {
     case cr.DATA: // client data
-      fmt.Printf("%d data, %s\n", len(ev.Data), serv.hostPort)
       serv.session.Send(ev.Data)
     case cr.EOF, cr.ERROR: // client close
       serv.session.Signal(sigClose)
@@ -85,7 +88,6 @@ func main() {
     case session.SESSION:
       log.Fatal("local should not have received this type of event")
     case session.DATA:
-      fmt.Printf("receive %d bytes from target\n", len(ev.Data))
       serv.clientConn.Write(ev.Data)
     case session.SIGNAL:
       if ev.Data[0] == sigClose {
