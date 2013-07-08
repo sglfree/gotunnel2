@@ -106,6 +106,7 @@ func handleClient(conn *net.TCPConn) {
         if serv.localClosed { serv.session.Close() }
       } else if sig == sigPing {
         fmt.Printf("%s pong\n", delta())
+        ev.Session.Signal(sigPing)
       }
     case session.ERROR: // error
       break loop

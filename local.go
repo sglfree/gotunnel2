@@ -89,20 +89,24 @@ func main() {
     }
   // server events
   case ev := <-comm.Events:
-    serv := ev.Session.Obj.(*Serv)
     switch ev.Type {
     case session.SESSION:
       log.Fatal("local should not have received this type of event")
     case session.DATA:
+      serv := ev.Session.Obj.(*Serv)
       serv.clientConn.Write(ev.Data)
     case session.SIGNAL:
-      if ev.Data[0] == sigClose {
+      sig := ev.Data[0]
+      if sig == sigClose {
+        serv := ev.Session.Obj.(*Serv)
         go func() {
           <-time.After(time.Second * 5)
           serv.clientConn.Close()
         }()
         serv.remoteClosed = true
         if serv.localClosed { serv.session.Close() }
+      } else if sig == sigPing {
+        fmt.Printf("%s pong\n", delta())
       }
     case session.ERROR:
       log.Fatal("error when communicating with server ", string(ev.Data))
