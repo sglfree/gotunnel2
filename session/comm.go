@@ -34,6 +34,7 @@ type Comm struct {
   conn *net.TCPConn
   sessions map[int64]*Session
   sendQueue chan []byte
+  ackQueue chan []byte
   Events chan Event
   serial uint64
   maxReceivedSerial uint64
@@ -43,6 +44,12 @@ type Comm struct {
   BytesReceived uint64
 }
 
+type Packet struct {
+  serial uint64
+  data []byte
+  next *Packet
+}
+
 func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
   _, err := aes.NewCipher(key)
   if err != nil { log.Fatal(err) }
@@ -50,6 +57,7 @@ func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
     conn: conn,
     sessions: make(map[int64]*Session),
     sendQueue: make(chan []byte, 65536),
+    ackQueue: make(chan []byte, 65536),
     Events: make(chan Event, 65536),
     key: key,
   }
@@ -64,11 +72,14 @@ func (self *Comm) nextSerial() uint64 {
 }
 
 func (self *Comm) startSender() {
-  for {
-    data := <-self.sendQueue
+  for { select {
+  case data := <-self.sendQueue:
     self.conn.Write(data)
     self.BytesSent += uint64(len(data))
-  }
+  case data := <-self.ackQueue:
+    self.conn.Write(data)
+    self.BytesSent += uint64(len(data))
+  }}
 }
 
 func (self *Comm) startReader() {
@@ -141,7 +152,7 @@ func (self *Comm) startAck() {
     binary.Write(buf, binary.LittleEndian, ackSerial)
     binary.Write(buf, binary.LittleEndian, rand.Int63())
     binary.Write(buf, binary.LittleEndian, typeAck)
-    self.sendQueue <- buf.Bytes()
+    self.ackQueue <- buf.Bytes()
     lastAck = ackSerial
   }
 }

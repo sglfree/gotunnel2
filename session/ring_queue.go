@@ -1,11 +1,5 @@
 package session
 
-type Packet struct {
-  serial uint64
-  data []byte
-  next *Packet
-}
-
 type RingQueue struct {
   head *Packet
   tail *Packet
