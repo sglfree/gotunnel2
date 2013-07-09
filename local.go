@@ -14,7 +14,7 @@ import (
 var defaultConfig = map[string]string{
   "local": "localhost:23456",
   "remote": "localhost:34567",
-  "key": "foo bar ",
+  "key": "foo bar baz foo bar baz ",
 }
 var globalConfig = loadConfig(defaultConfig)
 func checkConfig(key string) {
