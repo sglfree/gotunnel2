@@ -9,6 +9,7 @@ import (
   "encoding/json"
   "bytes"
   "os"
+  "fmt"
 )
 
 const (
@@ -25,6 +26,7 @@ func loadConfig(defaultConf map[string]string) map[string]string {
   currentUser, err := user.Current()
   if err != nil { log.Fatal("cannot get current user") }
   configFilePath := filepath.Join(currentUser.HomeDir, CONFIG_FILENAME)
+  fmt.Printf("loading configuration from %s\n", configFilePath)
   s, err := ioutil.ReadFile(configFilePath)
   if err != nil {
     //if !strings.Contains(err.Error(), "no such file") { log.Fatal(err) }

@@ -45,7 +45,7 @@ type Serv struct {
 func main() {
   t1 := time.Now()
   delta := func() string {
-    return fmt.Sprintf("%-15v", time.Now().Sub(t1))
+    return fmt.Sprintf("%-10.3f", time.Now().Sub(t1).Seconds())
   }
 
   // socks5 server
