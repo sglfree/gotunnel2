@@ -108,13 +108,17 @@ func (self *Comm) startReader() {
 }
 
 func (self *Comm) startAck() {
+  var lastAck uint64
   for {
+    <-time.After(time.Millisecond * 500)
+    ackSerial := self.maxReceivedSerial
+    if ackSerial == lastAck { continue }
     buf := new(bytes.Buffer)
-    binary.Write(buf, binary.LittleEndian, self.maxReceivedSerial)
+    binary.Write(buf, binary.LittleEndian, ackSerial)
     binary.Write(buf, binary.LittleEndian, rand.Int63())
     binary.Write(buf, binary.LittleEndian, typeAck)
     self.sendQueue <- buf.Bytes()
-    <-time.After(time.Millisecond * 200)
+    lastAck = ackSerial
   }
 }
 
