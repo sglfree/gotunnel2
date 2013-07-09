@@ -125,7 +125,7 @@ func handleClient(conn *net.TCPConn) {
           }()
         }
         serv.remoteClosed = true
-        if serv.localClosed { serv.session.Close() }
+        if serv.localClosed { closeServ(serv) }
       } else if sig == sigPing { // from keepaliveSession
         fmt.Printf("%s pong %10d >< %-10d\n", delta(), comm.BytesSent, comm.BytesReceived)
         ev.Session.Signal(sigPing)
@@ -149,8 +149,13 @@ func handleClient(conn *net.TCPConn) {
     case cr.EOF, cr.ERROR:
       serv.session.Signal(sigClose)
       serv.localClosed = true
-      if serv.remoteClosed { serv.session.Close() }
+      if serv.remoteClosed { closeServ(serv) }
     }
   goto loop
   }}
+}
+
+func closeServ(serv *Serv) {
+  serv.session.Close()
+  close(serv.sendQueue)
 }
