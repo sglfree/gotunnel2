@@ -120,7 +120,7 @@ func main() {
         serv.remoteClosed = true
         if serv.localClosed { serv.session.Close() }
       } else if sig == sigPing {
-        fmt.Printf("%s pong\n", delta())
+        fmt.Printf("%s pong %10d >< %-10d\n", delta(), comm.BytesSent, comm.BytesReceived)
       }
     case session.ERROR:
       log.Fatal("error when communicating with server ", string(ev.Data))

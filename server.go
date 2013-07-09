@@ -118,7 +118,7 @@ func handleClient(conn *net.TCPConn) {
         serv.remoteClosed = true
         if serv.localClosed { serv.session.Close() }
       } else if sig == sigPing { // from keepaliveSession
-        fmt.Printf("%s pong\n", delta())
+        fmt.Printf("%s pong %10d >< %-10d\n", delta(), comm.BytesSent, comm.BytesReceived)
         ev.Session.Signal(sigPing)
       }
     case session.ERROR: // error
