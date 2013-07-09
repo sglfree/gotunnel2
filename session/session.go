@@ -12,10 +12,11 @@ type Session struct {
   Obj interface{}
 }
 
-func (self *Session) constructPacket(t uint8, data []byte) []byte {
+func (self *Session) constructPacket(t uint8, data []byte) Packet {
   buf := new(bytes.Buffer)
   buf.Grow(len(data) + 8 + 8 + 1 + 4)
-  binary.Write(buf, binary.LittleEndian, self.comm.nextSerial())
+  serial := self.comm.nextSerial()
+  binary.Write(buf, binary.LittleEndian, serial)
   binary.Write(buf, binary.LittleEndian, self.Id)
   binary.Write(buf, binary.LittleEndian, t)
   binary.Write(buf, binary.LittleEndian, uint32(len(data)))
@@ -27,7 +28,7 @@ func (self *Session) constructPacket(t uint8, data []byte) []byte {
     buf.Write(v)
   }
   buf.Write(data[i - aes.BlockSize :])
-  return buf.Bytes()
+  return Packet{serial: serial, data: buf.Bytes()}
 }
 
 func (self *Session) Send(data []byte) {

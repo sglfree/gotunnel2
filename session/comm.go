@@ -33,7 +33,7 @@ type Event struct {
 type Comm struct {
   conn *net.TCPConn
   sessions map[int64]*Session
-  sendQueue chan []byte
+  sendQueue chan Packet
   ackQueue chan []byte
   Events chan Event
   serial uint64
@@ -56,7 +56,7 @@ func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
   c := &Comm{
     conn: conn,
     sessions: make(map[int64]*Session),
-    sendQueue: make(chan []byte, 65536),
+    sendQueue: make(chan Packet, 65536),
     ackQueue: make(chan []byte, 65536),
     Events: make(chan Event, 65536),
     key: key,
@@ -73,9 +73,9 @@ func (self *Comm) nextSerial() uint64 {
 
 func (self *Comm) startSender() {
   for { select {
-  case data := <-self.sendQueue:
-    self.conn.Write(data)
-    self.BytesSent += uint64(len(data))
+  case packet := <-self.sendQueue:
+    self.conn.Write(packet.data)
+    self.BytesSent += uint64(len(packet.data))
   case data := <-self.ackQueue:
     self.conn.Write(data)
     self.BytesSent += uint64(len(data))
