@@ -9,7 +9,7 @@ import (
   "./session"
   "time"
   "math/rand"
-  "bytes"
+  //"bytes"
 )
 
 // configuration
@@ -70,14 +70,14 @@ func main() {
   keepaliveTicker := time.NewTicker(time.Second * 5)
 
   // obfuscation
-  obfusSession := comm.NewSession(-1, []byte(obfusSessionMagic), nil)
-  obfusTimer := time.NewTimer(time.Millisecond * time.Duration(rand.Intn(2000) + 500))
+  //obfusSession := comm.NewSession(-1, []byte(obfusSessionMagic), nil)
+  //obfusTimer := time.NewTimer(time.Millisecond * time.Duration(rand.Intn(2000) + 500))
 
   for { select {
   // obfuscation
-  case <-obfusTimer.C:
-    obfusSession.Send(bytes.Repeat([]byte(fmt.Sprintf("%s", time.Now().UnixNano())), rand.Intn(1024)))
-    obfusTimer = time.NewTimer(time.Millisecond * time.Duration(rand.Intn(2000) + 500))
+  //case <-obfusTimer.C:
+  //  obfusSession.Send(bytes.Repeat([]byte(fmt.Sprintf("%s", time.Now().UnixNano())), rand.Intn(1024)))
+  //  obfusTimer = time.NewTimer(time.Millisecond * time.Duration(rand.Intn(2000) + 500))
   // keepalive
   case <-keepaliveTicker.C:
     keepaliveSession.Signal(sigPing)

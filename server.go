@@ -7,8 +7,10 @@ import (
   cr "./conn_reader"
   "./session"
   "time"
-  "io/ioutil"
+  //"io/ioutil"
   "io"
+  "os"
+  "runtime/pprof"
 )
 
 // configuration
@@ -75,7 +77,15 @@ func handleClient(conn *net.TCPConn) {
     return
   }
 
+  profileTicker := time.NewTicker(time.Second * 30)
+
   loop: for { select {
+  // write heap profile
+  case <-profileTicker.C:
+    outfile, err := os.Create("server_mem_prof")
+    if err != nil { log.Fatal(err) }
+    pprof.WriteHeapProfile(outfile)
+    outfile.Close()
   // local-side events
   case ev := <-comm.Events:
     switch ev.Type {
@@ -83,14 +93,15 @@ func handleClient(conn *net.TCPConn) {
       hostPort := string(ev.Data)
       if hostPort == keepaliveSessionMagic {
         continue loop
-      } else if hostPort == obfusSessionMagic {
-        serv := &Serv{
-          targetConn: ioutil.Discard,
-          session: ev.Session,
-        }
-        ev.Session.Obj = serv
-        continue loop
       }
+      //} else if hostPort == obfusSessionMagic {
+      //  serv := &Serv{
+      //    targetConn: ioutil.Discard,
+      //    session: ev.Session,
+      //  }
+      //  ev.Session.Obj = serv
+      //  continue loop
+      //}
       serv := &Serv{
         sendQueue: make(chan []byte, 65536),
         hostPort: hostPort,
