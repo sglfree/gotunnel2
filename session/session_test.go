@@ -81,4 +81,8 @@ func TestSession(t *testing.T) {
   if comm1.maxAckSerial == 0 {
     t.Fatal("no ack received")
   }
+
+  if comm1.BytesSent != comm2.BytesReceived {
+    t.Fatal("bytes sent not equal to bytes received")
+  }
 }

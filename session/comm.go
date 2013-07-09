@@ -39,6 +39,8 @@ type Comm struct {
   maxReceivedSerial uint64
   maxAckSerial uint64
   key []byte
+  BytesSent uint64
+  BytesReceived uint64
 }
 
 func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
@@ -63,7 +65,9 @@ func (self *Comm) nextSerial() uint64 {
 
 func (self *Comm) startSender() {
   for {
-    self.conn.Write(<-self.sendQueue)
+    data := <-self.sendQueue
+    self.conn.Write(data)
+    self.BytesSent += uint64(len(data))
   }
 }
 
@@ -74,19 +78,24 @@ func (self *Comm) startReader() {
   var serial uint64
   loop: for {
     binary.Read(self.conn, binary.LittleEndian, &serial)
+    self.BytesReceived += 8
     binary.Read(self.conn, binary.LittleEndian, &id)
+    self.BytesReceived += 8
     binary.Read(self.conn, binary.LittleEndian, &t)
+    self.BytesReceived += 1
     if t == typeAck { // ack packet
       self.maxAckSerial = serial
       continue loop
     }
     binary.Read(self.conn, binary.LittleEndian, &dataLen)
+    self.BytesReceived += 4
     data := make([]byte, dataLen)
     n, err := io.ReadFull(self.conn, data)
     if err != nil || uint32(n) != dataLen {
       self.emit(Event{Type: ERROR, Data: []byte("error occurred when reading data")})
       return
     }
+    self.BytesReceived += uint64(n)
     self.maxReceivedSerial = serial
     block, _ := aes.NewCipher(self.key)
     for i, size := aes.BlockSize, len(data); i < size; i += aes.BlockSize {
