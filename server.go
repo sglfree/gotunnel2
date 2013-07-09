@@ -48,7 +48,6 @@ type Serv struct {
   session *session.Session
   sendQueue chan []byte
   targetConn io.Writer
-  hostPort string
   localClosed bool
   remoteClosed bool
 }
@@ -64,11 +63,11 @@ func handleClient(conn *net.TCPConn) {
   targetReader := cr.New()
   comm := session.NewComm(conn, []byte(globalConfig["key"]))
   targetConnEvents := make(chan *Serv, 65536)
-  connectTarget := func(serv *Serv) {
+  connectTarget := func(serv *Serv, hostPort string) {
     defer func() {
       targetConnEvents <- serv
     }()
-    addr, err := net.ResolveTCPAddr("tcp", serv.hostPort)
+    addr, err := net.ResolveTCPAddr("tcp", hostPort)
     if err != nil { return }
     targetConn, err := net.DialTCP("tcp", nil, addr)
     if err != nil { return }
@@ -104,11 +103,10 @@ func handleClient(conn *net.TCPConn) {
       //}
       serv := &Serv{
         sendQueue: make(chan []byte, 65536),
-        hostPort: hostPort,
       }
       serv.session = ev.Session
       ev.Session.Obj = serv
-      go connectTarget(serv)
+      go connectTarget(serv, hostPort)
     case session.DATA: // local data
       serv := ev.Session.Obj.(*Serv)
       if serv.targetConn == nil {
