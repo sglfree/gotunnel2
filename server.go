@@ -102,7 +102,7 @@ func handleClient(conn *net.TCPConn) {
       //  continue loop
       //}
       serv := &Serv{
-        sendQueue: make(chan []byte, 65536),
+        sendQueue: make(chan []byte, 8),
       }
       serv.session = ev.Session
       ev.Session.Obj = serv
