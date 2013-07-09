@@ -77,16 +77,19 @@ func (self *Comm) startReader() {
   var dataLen uint32
   var serial uint64
   loop: for {
+    // read header
     binary.Read(self.conn, binary.LittleEndian, &serial)
     self.BytesReceived += 8
     binary.Read(self.conn, binary.LittleEndian, &id)
     self.BytesReceived += 8
     binary.Read(self.conn, binary.LittleEndian, &t)
     self.BytesReceived += 1
-    if t == typeAck { // ack packet
+    // is ack packet
+    if t == typeAck {
       self.maxAckSerial = serial
       continue loop
     }
+    // read data
     binary.Read(self.conn, binary.LittleEndian, &dataLen)
     self.BytesReceived += 4
     data := make([]byte, dataLen)
@@ -97,10 +100,12 @@ func (self *Comm) startReader() {
     }
     self.BytesReceived += uint64(n)
     self.maxReceivedSerial = serial
+    // decrypt
     block, _ := aes.NewCipher(self.key)
     for i, size := aes.BlockSize, len(data); i < size; i += aes.BlockSize {
       block.Decrypt(data[i - aes.BlockSize : i], data[i - aes.BlockSize : i])
     }
+
     switch t {
     case typeConnect:
       session := self.NewSession(id, nil, nil)
