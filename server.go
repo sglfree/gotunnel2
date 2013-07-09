@@ -11,6 +11,8 @@ import (
   "io"
   "os"
   "runtime/pprof"
+  _ "net/http/pprof"
+  "net/http"
 )
 
 // configuration
@@ -29,6 +31,9 @@ func checkConfig(key string) {
 func init() {
   checkConfig("listen")
   checkConfig("key")
+  go func() {
+    http.ListenAndServe("localhost:55555", nil)
+  }()
 }
 
 func main() {
