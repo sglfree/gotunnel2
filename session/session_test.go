@@ -26,8 +26,9 @@ func TestSession(t *testing.T) {
   if err != nil { t.Fatal(err) }
   <-ready
 
-  comm1 := NewComm(conn1)
-  comm2 := NewComm(conn2)
+  key := bytes.Repeat([]byte("foo bar "), 3)
+  comm1 := NewComm(conn1, key)
+  comm2 := NewComm(conn2, key)
 
   greeting := []byte("hello")
   session1 := comm1.NewSession(0, greeting, nil)

@@ -41,8 +41,7 @@ type Comm struct {
   key []byte
 }
 
-func NewComm(conn *net.TCPConn) (*Comm) {
-  key := bytes.Repeat([]byte("foo bar "), 3)
+func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
   _, err := aes.NewCipher(key)
   if err != nil { log.Fatal(err) }
   c := &Comm{
