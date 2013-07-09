@@ -135,11 +135,17 @@ func handleClient(conn *net.TCPConn) {
     }
   // target connection events
   case serv := <-targetConnEvents:
-    readQueue: for { select {
-    case data := <-serv.sendQueue:
-      serv.targetConn.Write(data)
-    default: break readQueue
-    }}
+    if serv.targetConn == nil { // fail to connect to target
+      serv.session.Signal(sigClose)
+      serv.localClosed = true
+      if serv.remoteClosed { closeServ(serv) }
+      continue loop
+    }
+    go func() {
+      for data := range serv.sendQueue {
+        serv.targetConn.Write(data)
+      }
+    }()
   // target events
   case ev := <-targetReader.Events:
     serv := ev.Obj.(*Serv)
