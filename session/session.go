@@ -3,6 +3,7 @@ package session
 import (
   "encoding/binary"
   "bytes"
+  "crypto/aes"
 )
 
 type Session struct {
@@ -13,11 +14,19 @@ type Session struct {
 
 func (self *Session) constructPacket(t uint8, data []byte) []byte {
   buf := new(bytes.Buffer)
+  buf.Grow(len(data) + 8 + 8 + 1 + 4)
   binary.Write(buf, binary.LittleEndian, self.comm.nextSerial())
   binary.Write(buf, binary.LittleEndian, self.Id)
   binary.Write(buf, binary.LittleEndian, t)
   binary.Write(buf, binary.LittleEndian, uint32(len(data)))
-  buf.Write(data)
+  block, _ := aes.NewCipher(self.comm.key)
+  v := make([]byte, aes.BlockSize)
+  var i, size int
+  for i, size = aes.BlockSize, len(data); i < size; i += aes.BlockSize {
+    block.Encrypt(v, data[i - aes.BlockSize : i])
+    buf.Write(v)
+  }
+  buf.Write(data[i - aes.BlockSize :])
   return buf.Bytes()
 }
 

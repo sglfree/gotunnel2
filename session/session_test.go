@@ -3,9 +3,9 @@ package session
 import (
   "testing"
   "net"
-  "bytes"
   "time"
   "fmt"
+  "bytes"
 )
 
 func TestSession(t *testing.T) {
@@ -43,9 +43,9 @@ func TestSession(t *testing.T) {
     t.Fatal("event not match")
   }
 
-  n := 10240
+  n := 2048
   for i := 0; i < n; i++ {
-    s := []byte(fmt.Sprintf("Hello, %d world!", i))
+    s := bytes.Repeat([]byte(fmt.Sprintf("Hello, %d world!", i)), i)
     session1.Send(s)
     select {
     case ev = <-comm2.Events:
@@ -56,7 +56,7 @@ func TestSession(t *testing.T) {
       t.Fatal("event not match again")
     }
     if bytes.Compare(s, ev.Data) != 0 {
-      t.Fatal("data not match")
+      t.Fatal(fmt.Sprintf("%d data not match: %x", i, ev.Data))
     }
   }
 

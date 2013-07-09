@@ -9,6 +9,8 @@ import (
   "fmt"
   "sync/atomic"
   "bytes"
+  "log"
+  "crypto/aes"
 )
 
 func init() {
@@ -36,14 +38,19 @@ type Comm struct {
   serial uint64
   maxReceivedSerial uint64
   maxAckSerial uint64
+  key []byte
 }
 
 func NewComm(conn *net.TCPConn) (*Comm) {
+  key := bytes.Repeat([]byte("foo bar "), 3)
+  _, err := aes.NewCipher(key)
+  if err != nil { log.Fatal(err) }
   c := &Comm{
     conn: conn,
     sessions: make(map[int64]*Session),
     sendQueue: make(chan []byte, 65536),
     Events: make(chan Event, 65536),
+    key: key,
   }
   go c.startSender()
   go c.startReader()
@@ -82,6 +89,10 @@ func (self *Comm) startReader() {
       return
     }
     self.maxReceivedSerial = serial
+    block, _ := aes.NewCipher(self.key)
+    for i, size := aes.BlockSize, len(data); i < size; i += aes.BlockSize {
+      block.Decrypt(data[i - aes.BlockSize : i], data[i - aes.BlockSize : i])
+    }
     switch t {
     case typeConnect:
       session := self.NewSession(id, nil, nil)
