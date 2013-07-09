@@ -33,3 +33,8 @@ func (self *RingQueue) Dequeue() *Packet {
   self.tail = self.tail.next
   return q
 }
+
+func (self *RingQueue) Peek() *Packet {
+  if self.tail == self.head { return nil }
+  return self.tail
+}

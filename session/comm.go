@@ -31,17 +31,18 @@ type Event struct {
 }
 
 type Comm struct {
-  conn *net.TCPConn
-  sessions map[int64]*Session
-  sendQueue chan Packet
-  ackQueue chan []byte
-  Events chan Event
-  serial uint64
+  conn *net.TCPConn // tcp connection to other side
+  sessions map[int64]*Session // map session id to *Session
+  sendQueue chan Packet // data packet queue
+  ackQueue chan []byte // ack packet queue
+  Events chan Event // events channel
+  serial uint64 // next packet serial
   maxReceivedSerial uint64
   maxAckSerial uint64
-  key []byte
+  key []byte // encryption key
   BytesSent uint64
   BytesReceived uint64
+  packets *RingQueue // packet buffer
 }
 
 type Packet struct {
@@ -60,6 +61,7 @@ func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
     ackQueue: make(chan []byte, 65536),
     Events: make(chan Event, 65536),
     key: key,
+    packets: NewRing(),
   }
   go c.startSender()
   go c.startReader()
@@ -76,6 +78,7 @@ func (self *Comm) startSender() {
   case packet := <-self.sendQueue:
     self.conn.Write(packet.data)
     self.BytesSent += uint64(len(packet.data))
+    self.packets.Enqueue(packet.serial, packet.data)
   case data := <-self.ackQueue:
     self.conn.Write(data)
     self.BytesSent += uint64(len(data))
@@ -98,6 +101,11 @@ func (self *Comm) startReader() {
     // is ack packet
     if t == typeAck {
       self.maxAckSerial = serial
+      // clear packet buffer
+      for p := self.packets.Peek(); p != nil && p.serial <= serial; {
+        self.packets.Dequeue()
+        p = self.packets.Peek()
+      }
       continue loop
     }
     // read data
