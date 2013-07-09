@@ -43,7 +43,8 @@ func TestSession(t *testing.T) {
     t.Fatal("event not match")
   }
 
-  for i := 0; i < 10240; i++ {
+  n := 10240
+  for i := 0; i < n; i++ {
     s := []byte(fmt.Sprintf("Hello, %d world!", i))
     session1.Send(s)
     select {
@@ -68,5 +69,15 @@ func TestSession(t *testing.T) {
   }
   if ev.Type != SIGNAL || ev.Session.Id != id1 || ev.Data[0] != sigClose {
     t.Fatal("event not match here")
+  }
+
+  if comm2.maxReceivedSerial < uint64(n) {
+    t.Fatal("serial not match")
+  }
+
+  <-time.After(time.Millisecond * 500)
+  fmt.Printf("max ack %d\n", comm1.maxAckSerial)
+  if comm1.maxAckSerial == 0 {
+    t.Fatal("no ack received")
   }
 }
