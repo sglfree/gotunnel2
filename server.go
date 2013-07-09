@@ -7,6 +7,8 @@ import (
   cr "./conn_reader"
   "./session"
   "time"
+  "io/ioutil"
+  "io"
 )
 
 // configuration
@@ -43,7 +45,7 @@ func main() {
 type Serv struct {
   session *session.Session
   sendQueue chan []byte
-  targetConn *net.TCPConn
+  targetConn io.Writer
   hostPort string
   localClosed bool
   remoteClosed bool
@@ -79,7 +81,16 @@ func handleClient(conn *net.TCPConn) {
     switch ev.Type {
     case session.SESSION: // new local session
       hostPort := string(ev.Data)
-      if hostPort == keepaliveSessionMagic { continue loop }
+      if hostPort == keepaliveSessionMagic {
+        continue loop
+      } else if hostPort == obfusSessionMagic {
+        serv := &Serv{
+          targetConn: ioutil.Discard,
+          session: ev.Session,
+        }
+        ev.Session.Obj = serv
+        continue loop
+      }
       serv := &Serv{
         sendQueue: make(chan []byte, 65536),
         hostPort: hostPort,
@@ -101,12 +112,12 @@ func handleClient(conn *net.TCPConn) {
         if serv.targetConn != nil {
           go func() {
             <-time.After(time.Second * 5)
-            serv.targetConn.Close()
+            serv.targetConn.(*net.TCPConn).Close()
           }()
         }
         serv.remoteClosed = true
         if serv.localClosed { serv.session.Close() }
-      } else if sig == sigPing {
+      } else if sig == sigPing { // from keepaliveSession
         fmt.Printf("%s pong\n", delta())
         ev.Session.Signal(sigPing)
       }

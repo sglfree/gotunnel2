@@ -18,6 +18,7 @@ const (
   sigPing = uint8(1)
 
   keepaliveSessionMagic = "I am a keepalive session."
+  obfusSessionMagic = "I am a obfuscation session."
 )
 
 func loadConfig(defaultConf map[string]string) map[string]string {
