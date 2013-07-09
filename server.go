@@ -12,6 +12,7 @@ import (
 // configuration
 var defaultConfig = map[string]string{
   "listen": "0.0.0.0:34567",
+  "key": "foo bar ",
 }
 var globalConfig = loadConfig(defaultConfig)
 func checkConfig(key string) {
@@ -23,6 +24,7 @@ func checkConfig(key string) {
 }
 func init() {
   checkConfig("listen")
+  checkConfig("key")
 }
 
 func main() {
@@ -56,7 +58,7 @@ func handleClient(conn *net.TCPConn) {
   }
 
   targetReader := cr.New()
-  comm := session.NewComm(conn)
+  comm := session.NewComm(conn, []byte(globalConfig["key"]))
   targetConnEvents := make(chan *Serv, 65536)
   connectTarget := func(serv *Serv) {
     defer func() {

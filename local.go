@@ -14,6 +14,7 @@ import (
 var defaultConfig = map[string]string{
   "local": "localhost:23456",
   "remote": "localhost:34567",
+  "key": "foo bar ",
 }
 var globalConfig = loadConfig(defaultConfig)
 func checkConfig(key string) {
@@ -26,6 +27,7 @@ func checkConfig(key string) {
 func init() {
   checkConfig("local")
   checkConfig("remote")
+  checkConfig("key")
 }
 
 type Serv struct {
@@ -57,7 +59,7 @@ func main() {
   if err != nil { log.Fatal("cannot connect to remote server ", err) }
   defer serverConn.Close()
   fmt.Printf("connected to server %v\n", serverConn.RemoteAddr())
-  comm := session.NewComm(serverConn)
+  comm := session.NewComm(serverConn, []byte(globalConfig["key"]))
 
   // keepalive
   keepaliveSession := comm.NewSession(-1, []byte(keepaliveSessionMagic), nil)
