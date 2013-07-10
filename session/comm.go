@@ -60,6 +60,7 @@ type Packet struct {
 }
 
 func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
+  if ref != nil && !ref.IsClosed { ref.Close() }
   c := new(Comm)
   c.conn = conn
   if ref != nil && ref.sessions != nil {
