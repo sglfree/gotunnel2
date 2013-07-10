@@ -131,9 +131,7 @@ func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
         serv.remoteClosed = true
         if serv.localClosed { closeServ(serv) }
       } else if sig == sigPing { // from keepaliveSession
-        time.AfterFunc(PING_INTERVAL, func() {
-          ev.Session.Signal(sigPing)
-        })
+        ev.Session.Signal(sigPing)
       }
     case session.ERROR: // error
       break loop

@@ -66,7 +66,7 @@ func main() {
 
   // keepalive
   keepaliveSession := comm.NewSession(-1, []byte(keepaliveSessionMagic), nil)
-  keepaliveSession.Signal(sigPing)
+  keepaliveTicker := time.NewTicker(PING_INTERVAL)
 
   // heartbeat
   heartbeat := time.NewTicker(time.Second * 2)
@@ -76,6 +76,9 @@ func main() {
   }
 
   for { select {
+  // ping
+  case <-keepaliveTicker.C:
+    keepaliveSession.Signal(sigPing)
   // heartbeat
   case <-heartbeat.C:
     fmt.Printf("%s %20s >< %-20s\n", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
@@ -120,9 +123,9 @@ func main() {
         serv.remoteClosed = true
         if serv.localClosed { serv.session.Close() }
       } else if sig == sigPing {
-        time.AfterFunc(PING_INTERVAL, func() {
-          ev.Session.Signal(sigPing)
-        })
+        //time.AfterFunc(PING_INTERVAL, func() {
+        //  ev.Session.Signal(sigPing)
+        //})
       }
     case session.ERROR:
       log.Fatal("error when communicating with server ", string(ev.Data))
