@@ -111,8 +111,13 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   go c.startReader()
   go c.startAck()
 
-  //TODO resent packets
-  //TODO ignore duplicated packets
+  // resent not acked packet
+  if ref != nil && ref.packets != nil {
+    for p := ref.packets.tail; p != ref.packets.head; p = p.next {
+      c.conn.Write(p.data)
+      c.BytesSent += uint64(len(p.data))
+    }
+  }
 
   return c
 }
