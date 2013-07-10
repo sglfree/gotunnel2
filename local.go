@@ -69,7 +69,7 @@ func main() {
   keepaliveSession.Signal(sigPing)
 
   // heartbeat
-  heartbeat := time.NewTicker(time.Second * 5)
+  heartbeat := time.NewTicker(time.Second * 2)
   t1 := time.Now()
   delta := func() string {
     return fmt.Sprintf("%-10.3f", time.Now().Sub(t1).Seconds())
@@ -78,7 +78,7 @@ func main() {
   for { select {
   // heartbeat
   case <-heartbeat.C:
-    fmt.Printf("%s %v\n", delta(), comm.LastReadTime)
+    fmt.Printf("%s %d >< %d\n", delta(), comm.BytesSent, comm.BytesReceived)
     if time.Now().Sub(comm.LastReadTime) > BAD_CONN_THRESHOLD {
       fmt.Printf("connection gone bad, reconnecting\n")
       comm = session.NewComm(getServerConn(), []byte(globalConfig["key"]), comm)
@@ -122,7 +122,6 @@ func main() {
       } else if sig == sigPing {
         time.AfterFunc(PING_INTERVAL, func() {
           ev.Session.Signal(sigPing)
-          fmt.Printf("%s pong\n", delta())
         })
       }
     case session.ERROR:
