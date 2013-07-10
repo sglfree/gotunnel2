@@ -107,10 +107,6 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   c.stoppedSender = make(chan struct{})
   c.stoppedAck = make(chan struct{})
 
-  go c.startSender()
-  go c.startReader()
-  go c.startAck()
-
   // resent not acked packet
   if ref != nil && ref.packets != nil {
     for p := ref.packets.tail; p != ref.packets.head; p = p.next {
@@ -118,6 +114,10 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
       c.BytesSent += uint64(len(p.data))
     }
   }
+
+  go c.startSender()
+  go c.startReader()
+  go c.startAck()
 
   return c
 }
