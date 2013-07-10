@@ -27,11 +27,13 @@ func (self *RingQueue) Enqueue(serial uint64, data []byte) {
   }
 }
 
-func (self *RingQueue) Dequeue() *Packet {
-  if self.tail == self.head { return nil }
-  q := self.tail
+func (self *RingQueue) Dequeue() (uint64, []byte) {
+  if self.tail == self.head { return 0, nil }
+  data := self.tail.data
+  serial := self.tail.serial
+  self.tail.data = nil
   self.tail = self.tail.next
-  return q
+  return serial, data
 }
 
 func (self *RingQueue) Peek() *Packet {
