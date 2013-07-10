@@ -43,6 +43,8 @@ type Comm struct {
   BytesSent uint64
   BytesReceived uint64
   packets *RingQueue // packet buffer
+  stopSender chan struct{} // chan to stop sender
+  stopAck chan struct{} // chan to stop ack
 }
 
 type Packet struct {
@@ -62,6 +64,8 @@ func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
     Events: make(chan Event, 65536),
     key: key,
     packets: NewRing(),
+    stopSender: make(chan struct{}),
+    stopAck: make(chan struct{}),
   }
   go c.startSender()
   go c.startReader()
@@ -82,6 +86,8 @@ func (self *Comm) startSender() {
   case data := <-self.ackQueue:
     self.conn.Write(data)
     self.BytesSent += uint64(len(data))
+  case <-self.stopSender:
+    return
   }}
 }
 
@@ -90,13 +96,17 @@ func (self *Comm) startReader() {
   var t uint8
   var dataLen uint32
   var serial uint64
+  var err error
   loop: for {
     // read header
-    binary.Read(self.conn, binary.LittleEndian, &serial)
+    err = binary.Read(self.conn, binary.LittleEndian, &serial)
+    if err != nil { return }
     self.BytesReceived += 8
-    binary.Read(self.conn, binary.LittleEndian, &id)
+    err = binary.Read(self.conn, binary.LittleEndian, &id)
+    if err != nil { return }
     self.BytesReceived += 8
-    binary.Read(self.conn, binary.LittleEndian, &t)
+    err = binary.Read(self.conn, binary.LittleEndian, &t)
+    if err != nil { return }
     self.BytesReceived += 1
     // is ack packet
     if t == typeAck {
@@ -109,12 +119,13 @@ func (self *Comm) startReader() {
       continue loop
     }
     // read data
-    binary.Read(self.conn, binary.LittleEndian, &dataLen)
+    err = binary.Read(self.conn, binary.LittleEndian, &dataLen)
+    if err != nil { return }
     self.BytesReceived += 4
     data := make([]byte, dataLen)
     n, err := io.ReadFull(self.conn, data)
     if err != nil || uint32(n) != dataLen {
-      self.emit(Event{Type: ERROR, Data: []byte("error occurred when reading data")})
+      //self.emit(Event{Type: ERROR, Data: []byte("error occurred when reading data")})
       return
     }
     self.BytesReceived += uint64(n)
@@ -152,17 +163,21 @@ func (self *Comm) startReader() {
 
 func (self *Comm) startAck() {
   var lastAck uint64
-  for {
-    <-time.After(time.Millisecond * 500)
+  ticker := time.NewTicker(time.Millisecond * 500)
+  buf := new(bytes.Buffer)
+  for { select {
+  case <-ticker.C:
     ackSerial := self.maxReceivedSerial
     if ackSerial == lastAck { continue }
-    buf := new(bytes.Buffer)
+    buf.Reset()
     binary.Write(buf, binary.LittleEndian, ackSerial)
     binary.Write(buf, binary.LittleEndian, rand.Int63())
     binary.Write(buf, binary.LittleEndian, typeAck)
     self.ackQueue <- buf.Bytes()
     lastAck = ackSerial
-  }
+  case <-self.stopAck:
+    return
+  }}
 }
 
 func (self *Comm) emit(ev Event) {
