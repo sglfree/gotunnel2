@@ -60,6 +60,9 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   c.conn = conn
   if ref != nil && ref.sessions != nil {
     c.sessions = ref.sessions
+    for _, session := range c.sessions {
+      session.comm = c
+    }
   } else {
     c.sessions = make(map[int64]*Session)
   }
