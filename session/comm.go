@@ -175,6 +175,7 @@ func (self *Comm) startReader() {
       return
     }
     self.BytesReceived += uint64(n)
+    if serial <= self.maxReceivedSerial { continue loop } // duplicated packet
     self.maxReceivedSerial = serial
     // decrypt
     block, _ := aes.NewCipher(self.key)
