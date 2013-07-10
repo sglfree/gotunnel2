@@ -81,7 +81,7 @@ func main() {
   case <-keepaliveTicker.C:
     keepaliveSession.Signal(sigPing)
     fmt.Printf("%s ping\n", delta())
-    if time.Now().Sub(lastRemotePing) > keepaliveInterval * 3 {
+    if time.Now().Sub(lastRemotePing) > keepaliveInterval {
       if time.Now().Sub(lastConnect) > time.Minute * 1 {
         fmt.Printf("connection gone bad, reconnecting\n")
         comm = session.NewComm(getServerConn(), []byte(globalConfig["key"]), comm)
