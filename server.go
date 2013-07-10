@@ -66,7 +66,7 @@ func handleClient(conn *net.TCPConn) {
   }
 
   targetReader := cr.New()
-  comm := session.NewComm(conn, []byte(globalConfig["key"]))
+  comm := session.NewComm(conn, []byte(globalConfig["key"]), nil)
   targetConnEvents := make(chan *Serv, 65536)
   connectTarget := func(serv *Serv, hostPort string) {
     defer func() {

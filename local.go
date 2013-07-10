@@ -63,7 +63,7 @@ func main() {
   if err != nil { log.Fatal("cannot connect to remote server ", err) }
   defer serverConn.Close()
   fmt.Printf("connected to server %v\n", serverConn.RemoteAddr())
-  comm := session.NewComm(serverConn, []byte(globalConfig["key"]))
+  comm := session.NewComm(serverConn, []byte(globalConfig["key"]), nil)
 
   // keepalive
   keepaliveSession := comm.NewSession(-1, []byte(keepaliveSessionMagic), nil)
