@@ -10,6 +10,7 @@ import (
   "bytes"
   "os"
   "fmt"
+  "time"
 )
 
 const (
@@ -19,6 +20,11 @@ const (
   sigPing = uint8(1)
 
   keepaliveSessionMagic = "I am a keepalive session."
+)
+
+var (
+  PING_INTERVAL = time.Second * 3
+  BAD_CONN_THRESHOLD = PING_INTERVAL * 3
 )
 
 func loadConfig(defaultConf map[string]string) map[string]string {

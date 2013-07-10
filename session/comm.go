@@ -51,6 +51,7 @@ type Comm struct {
   stoppedReader chan struct{}
   stoppedSender chan struct{}
   stoppedAck chan struct{}
+  LastReadTime time.Time
 }
 
 type Packet struct {
@@ -106,6 +107,7 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   c.stoppedReader = make(chan struct{})
   c.stoppedSender = make(chan struct{})
   c.stoppedAck = make(chan struct{})
+  c.LastReadTime = time.Now()
 
   // resent not acked packet
   if ref != nil && ref.packets != nil {
@@ -159,6 +161,7 @@ func (self *Comm) startReader() {
     err = binary.Read(self.conn, binary.LittleEndian, &t)
     if err != nil { return }
     self.BytesReceived += 1
+    self.LastReadTime = time.Now() // update last read time
     // is ack packet
     if t == typeAck {
       self.maxAckSerial = serial

@@ -70,11 +70,6 @@ type Serv struct {
 }
 
 func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
-  t1 := time.Now()
-  delta := func() string {
-    return fmt.Sprintf("%-10.3f", time.Now().Sub(t1).Seconds())
-  }
-
   targetReader := cr.New()
   comm := session.NewComm(conn, []byte(globalConfig["key"]), nil)
   targetConnEvents := make(chan *Serv, 65536)
@@ -136,8 +131,9 @@ func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
         serv.remoteClosed = true
         if serv.localClosed { closeServ(serv) }
       } else if sig == sigPing { // from keepaliveSession
-        fmt.Printf("%s pong %10d >< %-10d\n", delta(), comm.BytesSent, comm.BytesReceived)
-        ev.Session.Signal(sigPing)
+        time.AfterFunc(PING_INTERVAL, func() {
+          ev.Session.Signal(sigPing)
+        })
       }
     case session.ERROR: // error
       break loop
