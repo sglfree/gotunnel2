@@ -69,15 +69,7 @@ func main() {
   keepaliveSession := comm.NewSession(-1, []byte(keepaliveSessionMagic), nil)
   keepaliveTicker := time.NewTicker(time.Second * 5)
 
-  // obfuscation
-  //obfusSession := comm.NewSession(-1, []byte(obfusSessionMagic), nil)
-  //obfusTimer := time.NewTimer(time.Millisecond * time.Duration(rand.Intn(2000) + 500))
-
   for { select {
-  // obfuscation
-  //case <-obfusTimer.C:
-  //  obfusSession.Send(bytes.Repeat([]byte(fmt.Sprintf("%s", time.Now().UnixNano())), rand.Intn(1024)))
-  //  obfusTimer = time.NewTimer(time.Millisecond * time.Duration(rand.Intn(2000) + 500))
   // keepalive
   case <-keepaliveTicker.C:
     keepaliveSession.Signal(sigPing)
@@ -113,10 +105,9 @@ func main() {
       sig := ev.Data[0]
       if sig == sigClose {
         serv := ev.Session.Obj.(*Serv)
-        go func() {
-          <-time.After(time.Second * 5)
+        time.AfterFunc(time.Second * 5, func() {
           serv.clientConn.Close()
-        }()
+        })
         serv.remoteClosed = true
         if serv.localClosed { serv.session.Close() }
       } else if sig == sigPing {

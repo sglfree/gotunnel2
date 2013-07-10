@@ -98,14 +98,6 @@ func handleClient(conn *net.TCPConn) {
       if hostPort == keepaliveSessionMagic {
         continue loop
       }
-      //} else if hostPort == obfusSessionMagic {
-      //  serv := &Serv{
-      //    targetConn: ioutil.Discard,
-      //    session: ev.Session,
-      //  }
-      //  ev.Session.Obj = serv
-      //  continue loop
-      //}
       serv := &Serv{
         sendQueue: make(chan []byte, 8),
       }
@@ -124,10 +116,9 @@ func handleClient(conn *net.TCPConn) {
       if sig == sigClose {
         serv := ev.Session.Obj.(*Serv)
         if serv.targetConn != nil {
-          go func() {
-            <-time.After(time.Second * 5)
+          time.AfterFunc(time.Second * 5, func() {
             serv.targetConn.(*net.TCPConn).Close()
-          }()
+          })
         }
         serv.remoteClosed = true
         if serv.localClosed { closeServ(serv) }
