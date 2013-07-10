@@ -55,7 +55,7 @@ func main() {
       fmt.Printf("resetting conn of %d\n", commId)
       c <- conn
     } else {
-      connChangeChans[commId] = make(chan *net.TCPConn)
+      connChangeChans[commId] = make(chan *net.TCPConn, 8)
       go startServ(conn, connChangeChans[commId])
     }
   }
