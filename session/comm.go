@@ -33,6 +33,7 @@ type Event struct {
 }
 
 type Comm struct {
+  IsClosed bool
   conn *net.TCPConn // tcp connection to other side
   sessions map[int64]*Session // map session id to *Session
   sendQueue chan Packet // data packet queue
@@ -47,6 +48,9 @@ type Comm struct {
   packets *RingQueue // packet buffer
   stopSender chan struct{} // chan to stop sender
   stopAck chan struct{} // chan to stop ack
+  stoppedReader chan struct{}
+  stoppedSender chan struct{}
+  stoppedAck chan struct{}
 }
 
 type Packet struct {
@@ -98,10 +102,17 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   }
   c.stopSender = make(chan struct{})
   c.stopAck = make(chan struct{})
+  c.stoppedReader = make(chan struct{})
+  c.stoppedSender = make(chan struct{})
+  c.stoppedAck = make(chan struct{})
 
   go c.startSender()
   go c.startReader()
   go c.startAck()
+
+  //TODO resent packets
+  //TODO ignore duplicated packets
+
   return c
 }
 
@@ -119,11 +130,13 @@ func (self *Comm) startSender() {
     self.conn.Write(data)
     self.BytesSent += uint64(len(data))
   case <-self.stopSender:
+    close(self.stoppedSender)
     return
   }}
 }
 
 func (self *Comm) startReader() {
+  defer close(self.stoppedReader)
   var id int64
   var t uint8
   var dataLen uint32
@@ -197,10 +210,10 @@ func (self *Comm) startAck() {
   var lastAck uint64
   ticker := time.NewTicker(time.Millisecond * 500)
   buf := new(bytes.Buffer)
-  for { select {
+  loop: for { select {
   case <-ticker.C:
     ackSerial := self.maxReceivedSerial
-    if ackSerial == lastAck { continue }
+    if ackSerial == lastAck { continue loop }
     buf.Reset()
     binary.Write(buf, binary.LittleEndian, ackSerial)
     binary.Write(buf, binary.LittleEndian, rand.Int63())
@@ -208,8 +221,19 @@ func (self *Comm) startAck() {
     self.ackQueue <- buf.Bytes()
     lastAck = ackSerial
   case <-self.stopAck:
+    close(self.stoppedAck)
     return
   }}
+}
+
+func (self *Comm) Close() {
+  self.conn.Close()
+  close(self.stopSender)
+  close(self.stopAck)
+  <-self.stoppedReader
+  <-self.stoppedSender
+  <-self.stoppedAck
+  self.IsClosed = true
 }
 
 func (self *Comm) emit(ev Event) {

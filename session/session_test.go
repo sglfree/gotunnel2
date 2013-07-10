@@ -85,4 +85,9 @@ func TestSession(t *testing.T) {
   if comm1.BytesSent != comm2.BytesReceived {
     t.Fatal("bytes sent not equal to bytes received")
   }
+
+  comm1.Close()
+  comm2.Close()
+  if !comm1.IsClosed { t.Fatal("comm not closed") }
+  if !comm2.IsClosed { t.Fatal("comm not closed") }
 }
