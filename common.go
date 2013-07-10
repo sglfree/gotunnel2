@@ -23,8 +23,8 @@ const (
 )
 
 var (
-  PING_INTERVAL = time.Second * 3
-  BAD_CONN_THRESHOLD = PING_INTERVAL * 3
+  PING_INTERVAL = time.Second * 1
+  BAD_CONN_THRESHOLD = time.Second * 10
 )
 
 func loadConfig(defaultConf map[string]string) map[string]string {
