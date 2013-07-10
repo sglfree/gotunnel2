@@ -9,7 +9,7 @@ import (
   "./session"
   "time"
   "math/rand"
-  //"bytes"
+  "encoding/binary"
 )
 
 // configuration
@@ -59,21 +59,31 @@ func main() {
   // connect to remote server
   addr, err := net.ResolveTCPAddr("tcp", globalConfig["remote"])
   if err != nil { log.Fatal("cannot resolve remote addr ", err) }
-  serverConn, err := net.DialTCP("tcp", nil, addr)
-  if err != nil { log.Fatal("cannot connect to remote server ", err) }
-  defer serverConn.Close()
-  fmt.Printf("connected to server %v\n", serverConn.RemoteAddr())
-  comm := session.NewComm(serverConn, []byte(globalConfig["key"]), nil)
+  commId := rand.Int63()
+  getServerConn := func() *net.TCPConn {
+    serverConn, err := net.DialTCP("tcp", nil, addr)
+    if err != nil { log.Fatal("cannot connect to remote server ", err) }
+    fmt.Printf("connected to server %v\n", serverConn.RemoteAddr())
+    binary.Write(serverConn, binary.LittleEndian, commId)
+    return serverConn
+  }
+  comm := session.NewComm(getServerConn(), []byte(globalConfig["key"]), nil)
 
   // keepalive
   keepaliveSession := comm.NewSession(-1, []byte(keepaliveSessionMagic), nil)
-  keepaliveTicker := time.NewTicker(time.Second * 5)
+  keepaliveInterval := time.Second * 5
+  keepaliveTicker := time.NewTicker(keepaliveInterval)
+  lastRemotePing := time.Now()
 
   for { select {
   // keepalive
   case <-keepaliveTicker.C:
     keepaliveSession.Signal(sigPing)
     fmt.Printf("%s ping\n", delta())
+    if time.Now().Sub(lastRemotePing) > keepaliveInterval * 3 {
+      fmt.Printf("connection gone bad, reconnecting\n")
+      comm = session.NewComm(getServerConn(), []byte(globalConfig["key"]), comm)
+    }
   // new socks client
   case socksClient := <-socksServer.Clients:
     serv := &Serv{
@@ -112,6 +122,7 @@ func main() {
         if serv.localClosed { serv.session.Close() }
       } else if sig == sigPing {
         fmt.Printf("%s pong %10d >< %-10d\n", delta(), comm.BytesSent, comm.BytesReceived)
+        lastRemotePing = time.Now()
       }
     case session.ERROR:
       log.Fatal("error when communicating with server ", string(ev.Data))

@@ -176,7 +176,6 @@ func (self *Comm) startReader() {
     data := make([]byte, dataLen)
     n, err := io.ReadFull(self.conn, data)
     if err != nil || uint32(n) != dataLen {
-      //self.emit(Event{Type: ERROR, Data: []byte("error occurred when reading data")})
       return
     }
     self.BytesReceived += uint64(n)

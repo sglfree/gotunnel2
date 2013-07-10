@@ -13,6 +13,7 @@ import (
   "runtime/pprof"
   _ "net/http/pprof"
   "net/http"
+  "encoding/binary"
 )
 
 // configuration
@@ -42,10 +43,21 @@ func main() {
   ln, err := net.ListenTCP("tcp", addr)
   if err != nil { log.Fatal("cannot listen ", err) }
   fmt.Printf("server listening on %v\n", ln.Addr())
+  var commId int64
+  connChangeChans := make(map[int64]chan *net.TCPConn)
   for {
     conn, err := ln.AcceptTCP()
     if err != nil { continue }
-    go handleClient(conn)
+    err = binary.Read(conn, binary.LittleEndian, &commId)
+    if err != nil { continue }
+    c, ok := connChangeChans[commId]
+    if ok { // change conn
+      fmt.Printf("resetting conn of %d\n", commId)
+      c <- conn
+    } else {
+      connChangeChans[commId] = make(chan *net.TCPConn)
+      go startServ(conn, connChangeChans[commId])
+    }
   }
 }
 
@@ -57,9 +69,7 @@ type Serv struct {
   remoteClosed bool
 }
 
-func handleClient(conn *net.TCPConn) {
-  defer conn.Close()
-
+func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
   t1 := time.Now()
   delta := func() string {
     return fmt.Sprintf("%-10.3f", time.Now().Sub(t1).Seconds())
@@ -84,6 +94,9 @@ func handleClient(conn *net.TCPConn) {
   profileTicker := time.NewTicker(time.Second * 30)
 
   loop: for { select {
+  // conn change
+  case conn := <-connChange:
+    comm = session.NewComm(conn, []byte(globalConfig["key"]), comm)
   // write heap profile
   case <-profileTicker.C:
     outfile, err := os.Create("server_mem_prof")
