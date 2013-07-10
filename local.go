@@ -74,6 +74,7 @@ func main() {
   keepaliveInterval := time.Second * 5
   keepaliveTicker := time.NewTicker(keepaliveInterval)
   lastRemotePing := time.Now()
+  lastConnect := time.Now()
 
   for { select {
   // keepalive
@@ -81,8 +82,11 @@ func main() {
     keepaliveSession.Signal(sigPing)
     fmt.Printf("%s ping\n", delta())
     if time.Now().Sub(lastRemotePing) > keepaliveInterval * 3 {
-      fmt.Printf("connection gone bad, reconnecting\n")
-      comm = session.NewComm(getServerConn(), []byte(globalConfig["key"]), comm)
+      if time.Now().Sub(lastConnect) > time.Minute * 1 {
+        fmt.Printf("connection gone bad, reconnecting\n")
+        comm = session.NewComm(getServerConn(), []byte(globalConfig["key"]), comm)
+        lastConnect = time.Now()
+      }
     }
   // new socks client
   case socksClient := <-socksServer.Clients:
