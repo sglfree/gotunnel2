@@ -93,4 +93,33 @@ func TestSession(t *testing.T) {
   comm2.Close()
   if !comm1.IsClosed { t.Fatal("comm not closed") }
   if !comm2.IsClosed { t.Fatal("comm not closed") }
+
+  // test connection reset
+  conn1, conn2 = getConns()
+  comm1 = NewComm(conn1, key, nil)
+  comm2 = NewComm(conn2, key, nil)
+  n = 10240
+  go func() {
+    x := 0
+    for {
+      ev := <-comm2.Events
+      if ev.Type != DATA { continue }
+      s := string(ev.Data)
+      expected := fmt.Sprintf("data-%d", x)
+      if string(ev.Data) != fmt.Sprintf("data-%d", x) {
+        t.Fatal("expected ", expected, " get ", s)
+      }
+      x += 1
+    }
+  }()
+  session1 = comm1.NewSession(-1, nil, nil)
+  for i := 0; i < n; i++ {
+    session1.Send([]byte(fmt.Sprintf("data-%d", i)))
+    if i % 128 == 0 {
+      conn1, conn2 = getConns()
+      comm1 = NewComm(conn1, key, comm1)
+      comm2 = NewComm(conn2, key, comm2)
+      fmt.Printf("connection reset, %v %v\n", conn1.RemoteAddr(), conn2.LocalAddr())
+    }
+  }
 }
