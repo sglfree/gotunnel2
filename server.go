@@ -33,7 +33,7 @@ func init() {
   checkConfig("listen")
   checkConfig("key")
   go func() {
-    http.ListenAndServe("localhost:55555", nil)
+    http.ListenAndServe("0.0.0.0:55555", nil)
   }()
 }
 
