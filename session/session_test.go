@@ -13,18 +13,21 @@ func TestSession(t *testing.T) {
   if err != nil { t.Fatal(err) }
   ln, err := net.ListenTCP("tcp", addr1)
   if err != nil { t.Fatal(err) }
-  var conn1 *net.TCPConn
-  ready := make(chan struct{})
-  go func() {
-    var err error
-    conn1, err = ln.AcceptTCP()
+  getConns := func() (*net.TCPConn, *net.TCPConn) {
+    var conn1 *net.TCPConn
+    ready := make(chan struct{})
+    go func() {
+      var err error
+      conn1, err = ln.AcceptTCP()
+      if err != nil { t.Fatal(err) }
+      close(ready)
+    }()
+    conn2, err := net.DialTCP("tcp", nil, addr1)
     if err != nil { t.Fatal(err) }
-    close(ready)
-  }()
-
-  conn2, err := net.DialTCP("tcp", nil, addr1)
-  if err != nil { t.Fatal(err) }
-  <-ready
+    <-ready
+    return conn1, conn2
+  }
+  conn1, conn2 := getConns()
 
   key := bytes.Repeat([]byte("foo bar "), 3)
   comm1 := NewComm(conn1, key, nil)
