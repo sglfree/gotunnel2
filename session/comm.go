@@ -22,6 +22,8 @@ const (
   DATA
   SIGNAL
   ERROR
+
+  BUFFERED_CHAN_SIZE = 2048
 )
 
 type Event struct {
@@ -53,20 +55,47 @@ type Packet struct {
   next *Packet
 }
 
-func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
-  _, err := aes.NewCipher(key)
-  if err != nil { log.Fatal(err) }
-  c := &Comm{
-    conn: conn,
-    sessions: make(map[int64]*Session),
-    sendQueue: make(chan Packet, 65536),
-    ackQueue: make(chan []byte, 65536),
-    Events: make(chan Event, 65536),
-    key: key,
-    packets: NewRing(),
-    stopSender: make(chan struct{}),
-    stopAck: make(chan struct{}),
+func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
+  c := new(Comm)
+  c.conn = conn
+  if ref != nil && ref.sessions != nil {
+    c.sessions = ref.sessions
+  } else {
+    c.sessions = make(map[int64]*Session)
   }
+  c.sendQueue = make(chan Packet, BUFFERED_CHAN_SIZE)
+  c.ackQueue = make(chan []byte, BUFFERED_CHAN_SIZE)
+  if ref != nil && ref.Events != nil {
+    c.Events = ref.Events
+  } else {
+    c.Events = make(chan Event, BUFFERED_CHAN_SIZE)
+  }
+  if ref != nil && ref.serial != 0 {
+    c.serial = ref.serial
+  }
+  if ref != nil && ref.maxReceivedSerial != 0 {
+    c.maxReceivedSerial = ref.maxReceivedSerial
+  }
+  if ref != nil && ref.maxAckSerial != 0 {
+    c.maxAckSerial = ref.maxAckSerial
+  }
+  c.key = key
+  _, err := aes.NewCipher(c.key)
+  if err != nil { log.Fatal(err) }
+  if ref != nil && ref.BytesSent != 0 {
+    c.BytesSent = ref.BytesSent
+  }
+  if ref != nil && ref.BytesReceived != 0 {
+    c.BytesReceived = ref.BytesReceived
+  }
+  if ref != nil && ref.packets != nil {
+    c.packets = ref.packets
+  } else {
+    c.packets = NewRing()
+  }
+  c.stopSender = make(chan struct{})
+  c.stopAck = make(chan struct{})
+
   go c.startSender()
   go c.startReader()
   go c.startAck()
