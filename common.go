@@ -59,3 +59,29 @@ func marshalConfig(config map[string]string) []byte {
   json.Indent(buf, b, "", "    ")
   return buf.Bytes()
 }
+
+func formatFlow(n uint64) string {
+  units := []string{"b", "k", "m", "g", "t"}
+  i := 0
+  ret := ""
+  for n > 0 && i < len(units) {
+    if n % 1024 > 0 {
+      ret = fmt.Sprintf("%d%s", n % 1024, units[i]) + ret
+    }
+    n = n / 1024
+    i += 1
+  }
+  return ret
+}
+
+//func main() {
+//  println(formatFlow(5))
+//  println(formatFlow(1024))
+//  println(formatFlow(1025))
+//  println(formatFlow(1024 * 24))
+//  println(formatFlow(1024 * 1024))
+//  println(formatFlow(1024 * 1025))
+//  println(formatFlow(1024 * 1024 * 1024))
+//  println(formatFlow(1024 * 1024 * 1025 + 1024 * 48))
+//  println(formatFlow(1024 * 1024 * 1025 + 1024 * 48 + 3))
+//}

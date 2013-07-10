@@ -78,7 +78,7 @@ func main() {
   for { select {
   // heartbeat
   case <-heartbeat.C:
-    fmt.Printf("%s %d >< %d\n", delta(), comm.BytesSent, comm.BytesReceived)
+    fmt.Printf("%s %20s >< %-20s\n", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
     if time.Now().Sub(comm.LastReadTime) > BAD_CONN_THRESHOLD {
       fmt.Printf("connection gone bad, reconnecting\n")
       comm = session.NewComm(getServerConn(), []byte(globalConfig["key"]), comm)
