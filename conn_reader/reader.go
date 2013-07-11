@@ -31,7 +31,7 @@ type Event struct {
 
 func New() *ConnReader {
   self := new(ConnReader)
-  self.Events = make(chan Event, 65536)
+  self.Events = make(chan Event, 512)
   return self
 }
 

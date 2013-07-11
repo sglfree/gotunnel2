@@ -23,7 +23,7 @@ func (self *Server) Close() {
 
 func New(listenAddr string) (*Server, error) {
   server := &Server{
-    Clients: make(chan *Client, 65536),
+    Clients: make(chan *Client, 512),
   }
   addr, err := net.ResolveTCPAddr("tcp", listenAddr)
   if err != nil { return nil, server.newError(err) }

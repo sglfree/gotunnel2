@@ -72,7 +72,7 @@ func main() {
   heartbeat := time.NewTicker(time.Second * 2)
   t1 := time.Now()
   delta := func() string {
-    return fmt.Sprintf("%-10.3f", time.Now().Sub(t1).Seconds())
+    return fmt.Sprintf("%7.0fs", time.Now().Sub(t1).Seconds())
   }
 
   for { select {
