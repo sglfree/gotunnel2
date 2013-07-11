@@ -38,6 +38,16 @@ func init() {
 }
 
 func main() {
+  go func() { // profile
+    profileTicker := time.NewTicker(time.Second * 30)
+    for _ = range profileTicker.C {
+      outfile, err := os.Create("server_mem_prof")
+      if err != nil { log.Fatal(err) }
+      pprof.WriteHeapProfile(outfile)
+      outfile.Close()
+    }
+  }()
+
   addr, err := net.ResolveTCPAddr("tcp", globalConfig["listen"])
   if err != nil { log.Fatal("cannot resolve listen address ", err) }
   ln, err := net.ListenTCP("tcp", addr)
@@ -88,18 +98,11 @@ func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
     return
   }
 
-  profileTicker := time.NewTicker(time.Second * 30)
 
   loop: for { select {
   // conn change
   case conn := <-connChange:
     comm = session.NewComm(conn, []byte(globalConfig["key"]), comm)
-  // write heap profile
-  case <-profileTicker.C:
-    outfile, err := os.Create("server_mem_prof")
-    if err != nil { log.Fatal(err) }
-    pprof.WriteHeapProfile(outfile)
-    outfile.Close()
   // local-side events
   case ev := <-comm.Events:
     switch ev.Type {
