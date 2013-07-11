@@ -98,8 +98,14 @@ func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
     return
   }
 
+  heartbeat := time.NewTicker(time.Minute * 5)
 
   loop: for { select {
+  // heartbeat
+  case <-heartbeat.C:
+    if time.Now().Sub(comm.LastReadTime) > time.Minute * 5 {
+      break loop
+    }
   // conn change
   case conn := <-connChange:
     comm = session.NewComm(conn, []byte(globalConfig["key"]), comm)
@@ -165,8 +171,21 @@ func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
       serv.localClosed = true
       if serv.remoteClosed { closeServ(serv) }
     }
-  goto loop
   }}
+
+  // clear
+  for _, session := range comm.Sessions {
+    serv, ok := session.Obj.(*Serv)
+    if ok {
+      closeServ(serv)
+      fmt.Printf("closed serv %d\n", serv.session.Id)
+    } else {
+      fmt.Printf("closed session %d\n", session.Id)
+      session.Close()
+    }
+  }
+  comm.Close()
+  fmt.Printf("comm closed\n")
 }
 
 func closeServ(serv *Serv) {
