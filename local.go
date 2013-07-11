@@ -94,6 +94,7 @@ func main() {
     }
     serv.session = comm.NewSession(-1, []byte(socksClient.HostPort), serv)
     clientReader.Add(socksClient.Conn, serv)
+    fmt.Printf("new client to %s\n", socksClient.HostPort)
   // client events
   case ev := <-clientReader.Events:
     serv := ev.Obj.(*Serv)
@@ -103,7 +104,7 @@ func main() {
     case cr.EOF, cr.ERROR: // client close
       serv.session.Signal(sigClose)
       serv.localClosed = true
-      if serv.remoteClosed { serv.session.Close() }
+      if serv.remoteClosed { closeServ(serv) }
     }
   // server events
   case ev := <-comm.Events:
@@ -121,14 +122,16 @@ func main() {
           serv.clientConn.Close()
         })
         serv.remoteClosed = true
-        if serv.localClosed { serv.session.Close() }
+        if serv.localClosed { closeServ(serv) }
       } else if sig == sigPing {
-        //time.AfterFunc(PING_INTERVAL, func() {
-        //  ev.Session.Signal(sigPing)
-        //})
       }
     case session.ERROR:
       log.Fatal("error when communicating with server ", string(ev.Data))
     }
   }}
+}
+
+func closeServ(serv *Serv) {
+ serv.session.Close()
+ fmt.Printf("client to %s closed\n", serv.hostPort)
 }
