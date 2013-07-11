@@ -43,21 +43,23 @@ func main() {
   ln, err := net.ListenTCP("tcp", addr)
   if err != nil { log.Fatal("cannot listen ", err) }
   fmt.Printf("server listening on %v\n", ln.Addr())
-  var commId int64
   connChangeChans := make(map[int64]chan *net.TCPConn)
   for {
     conn, err := ln.AcceptTCP()
     if err != nil { continue }
-    err = binary.Read(conn, binary.LittleEndian, &commId)
-    if err != nil { continue }
-    c, ok := connChangeChans[commId]
-    if ok { // change conn
-      fmt.Printf("resetting conn of %d\n", commId)
-      c <- conn
-    } else {
-      connChangeChans[commId] = make(chan *net.TCPConn, 8)
-      go startServ(conn, connChangeChans[commId])
-    }
+    go func() {
+      var commId int64
+      err = binary.Read(conn, binary.LittleEndian, &commId)
+      if err != nil { return }
+      c, ok := connChangeChans[commId]
+      if ok { // change conn
+        fmt.Printf("resetting conn of %d\n", commId)
+        c <- conn
+      } else {
+        connChangeChans[commId] = make(chan *net.TCPConn, 8)
+        startServ(conn, connChangeChans[commId])
+      }
+    }()
   }
 }
 
