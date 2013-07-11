@@ -98,7 +98,7 @@ func main() {
 
 type Serv struct {
   session *session.Session
-  sendQueue chan []byte
+  sendQueue [][]byte
   targetConn io.Writer
   localClosed bool
   remoteClosed bool
@@ -141,7 +141,7 @@ func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
         continue loop
       }
       serv := &Serv{
-        sendQueue: make(chan []byte, 8),
+        sendQueue: make([][]byte, 0, 8),
       }
       serv.session = ev.Session
       ev.Session.Obj = serv
@@ -149,7 +149,7 @@ func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
     case session.DATA: // local data
       serv := ev.Session.Obj.(*Serv)
       if serv.targetConn == nil {
-        serv.sendQueue <- ev.Data
+        serv.sendQueue = append(serv.sendQueue, ev.Data)
       } else {
         serv.targetConn.Write(ev.Data)
       }
@@ -178,11 +178,10 @@ func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
       if serv.remoteClosed { closeServ(serv) }
       continue loop
     }
-    go func() {
-      for data := range serv.sendQueue {
-        serv.targetConn.Write(data)
-      }
-    }()
+    for _, data := range serv.sendQueue {
+      serv.targetConn.Write(data)
+    }
+    serv.sendQueue = nil
   // target events
   case ev := <-targetReader.Events:
     serv := ev.Obj.(*Serv)
@@ -213,5 +212,4 @@ func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
 
 func closeServ(serv *Serv) {
   serv.session.Close()
-  close(serv.sendQueue)
 }
