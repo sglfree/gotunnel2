@@ -35,7 +35,7 @@ type Event struct {
 type Comm struct {
   IsClosed bool
   conn *net.TCPConn // tcp connection to other side
-  sessions map[int64]*Session // map session id to *Session
+  Sessions map[int64]*Session // map session id to *Session
   sendQueue chan Packet // data packet queue
   ackQueue chan []byte // ack packet queue
   Events chan Event // events channel
@@ -64,13 +64,13 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   if ref != nil && !ref.IsClosed { ref.Close() }
   c := new(Comm)
   c.conn = conn
-  if ref != nil && ref.sessions != nil {
-    c.sessions = ref.sessions
-    for _, session := range c.sessions {
+  if ref != nil && ref.Sessions != nil {
+    c.Sessions = ref.Sessions
+    for _, session := range c.Sessions {
       session.comm = c
     }
   } else {
-    c.sessions = make(map[int64]*Session)
+    c.Sessions = make(map[int64]*Session)
   }
   c.sendQueue = make(chan Packet, BUFFERED_CHAN_SIZE)
   c.ackQueue = make(chan []byte, BUFFERED_CHAN_SIZE)
@@ -195,14 +195,14 @@ func (self *Comm) startReader() {
       session := self.NewSession(id, nil, nil)
       self.emit(Event{Type: SESSION, Session: session, Data: data})
     case typeData:
-      session, ok := self.sessions[id]
+      session, ok := self.Sessions[id]
       if !ok {
         self.emit(Event{Type: ERROR, Session: &Session{Id: id}, Data: []byte("unregistered session id")})
         return
       }
       self.emit(Event{Type: DATA, Session: session, Data: data})
     case typeSignal:
-      session, ok := self.sessions[id]
+      session, ok := self.Sessions[id]
       if !ok {
         self.emit(Event{Type: ERROR, Session: &Session{Id: id}, Data: []byte("unregistered session id")})
         return
@@ -263,6 +263,6 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
   if isNew {
     self.sendQueue <- session.constructPacket(typeConnect, data)
   }
-  self.sessions[id] = session
+  self.Sessions[id] = session
   return session
 }

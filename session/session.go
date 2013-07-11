@@ -40,5 +40,5 @@ func (self *Session) Signal(sig uint8) {
 }
 
 func (self *Session) Close() {
-  delete(self.comm.sessions, self.Id)
+  delete(self.comm.Sessions, self.Id)
 }
