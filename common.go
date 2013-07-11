@@ -11,7 +11,14 @@ import (
   "os"
   "fmt"
   "time"
+  "crypto/aes"
+  "errors"
+  "math/rand"
 )
+
+func init() {
+  rand.Seed(time.Now().UnixNano())
+}
 
 const (
   CONFIG_FILENAME = ".gotunnel.conf"
@@ -74,6 +81,28 @@ func formatFlow(n uint64) string {
   return ret
 }
 
+func encrypt(key []byte, in []byte) ([]byte, error) {
+  if len(in) % aes.BlockSize != 0 {
+    return nil, errors.New("input data length incorrect")
+  }
+  block, err := aes.NewCipher(key)
+  if err != nil { return nil, err }
+  out := make([]byte, len(in))
+  for i, l := 0, len(in); i < l; i += aes.BlockSize {
+    block.Encrypt(out[i : i + aes.BlockSize], in[i : i + aes.BlockSize])
+  }
+  return out, nil
+}
+
+func genRandBytes(n int) []byte {
+  buf := new(bytes.Buffer)
+  buf.Grow(n)
+  for i := 0; i < n; i++ {
+    buf.Write([]byte{byte(rand.Intn(256))})
+  }
+  return buf.Bytes()
+}
+
 //func main() {
 //  println(formatFlow(5))
 //  println(formatFlow(1024))
@@ -84,4 +113,10 @@ func formatFlow(n uint64) string {
 //  println(formatFlow(1024 * 1024 * 1024))
 //  println(formatFlow(1024 * 1024 * 1025 + 1024 * 48))
 //  println(formatFlow(1024 * 1024 * 1025 + 1024 * 48 + 3))
+
+//  key := genRandBytes(24)
+//  in := genRandBytes(64)
+//  enc, err := encrypt(key, in)
+//  if err != nil { log.Fatal(err) }
+//  fmt.Printf("%x\n%x\n", in, enc)
 //}

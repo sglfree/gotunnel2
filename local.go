@@ -55,14 +55,25 @@ func main() {
   addr, err := net.ResolveTCPAddr("tcp", globalConfig["remote"])
   if err != nil { log.Fatal("cannot resolve remote addr ", err) }
   commId := rand.Int63()
+  cipherKey := []byte(globalConfig["key"])
   getServerConn := func() *net.TCPConn {
     serverConn, err := net.DialTCP("tcp", nil, addr)
     if err != nil { log.Fatal("cannot connect to remote server ", err) }
     fmt.Printf("connected to server %v\n", serverConn.RemoteAddr())
+    // auth
+    origin := genRandBytes(64)
+    encrypted, err := encrypt(cipherKey, origin)
+    if err != nil { log.Fatal(err) }
+    serverConn.Write(origin)
+    serverConn.Write(encrypted)
+    var response byte
+    err = binary.Read(serverConn, binary.LittleEndian, &response)
+    if err != nil || response != byte(1) { log.Fatal("auth fail ", err) }
+    // sent comm id
     binary.Write(serverConn, binary.LittleEndian, commId)
     return serverConn
   }
-  comm := session.NewComm(getServerConn(), []byte(globalConfig["key"]), nil)
+  comm := session.NewComm(getServerConn(), cipherKey, nil)
 
   // keepalive
   keepaliveSession := comm.NewSession(-1, []byte(keepaliveSessionMagic), nil)
@@ -84,7 +95,7 @@ func main() {
     fmt.Printf("%s %20s >< %-20s\n", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
     if time.Now().Sub(comm.LastReadTime) > BAD_CONN_THRESHOLD {
       fmt.Printf("connection gone bad, reconnecting\n")
-      comm = session.NewComm(getServerConn(), []byte(globalConfig["key"]), comm)
+      comm = session.NewComm(getServerConn(), cipherKey, comm)
     }
   // new socks client
   case socksClient := <-socksServer.Clients:

@@ -14,6 +14,7 @@ import (
   _ "net/http/pprof"
   "net/http"
   "encoding/binary"
+  "bytes"
 )
 
 // configuration
@@ -59,13 +60,35 @@ func main() {
     if err != nil { continue }
     go func() {
       var commId int64
+      // auth
+      origin := make([]byte, 64)
+      n, err := io.ReadFull(conn, origin)
+      if err != nil || n != 64 {
+        conn.Close()
+        return
+      }
+      encrypted := make([]byte, 64)
+      n, err = io.ReadFull(conn, encrypted)
+      if err != nil || n != 64 {
+        conn.Close()
+        return
+      }
+      expected, err := encrypt([]byte(globalConfig["key"]), origin)
+      if err != nil { log.Fatal(err) }
+      if bytes.Compare(expected, encrypted) != 0 { // auth fail
+        conn.Write([]byte{0x0})
+        conn.Close()
+        return
+      } else {
+        conn.Write([]byte{0x1})
+      }
+      // read comm id
       err = binary.Read(conn, binary.LittleEndian, &commId)
       if err != nil { return }
       c, ok := connChangeChans[commId]
       if ok { // change conn
-        fmt.Printf("resetting conn of %d\n", commId)
         c <- conn
-      } else {
+      } else { // handle new comm
         connChangeChans[commId] = make(chan *net.TCPConn, 8)
         startServ(conn, connChangeChans[commId])
       }
