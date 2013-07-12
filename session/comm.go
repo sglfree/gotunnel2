@@ -242,6 +242,7 @@ func (self *Comm) Close() {
   <-self.stoppedReader
   <-self.stoppedSender
   <-self.stoppedAck
+  close(self.sendQueue)
   self.IsClosed = true
 }
 
