@@ -243,6 +243,7 @@ func (self *Comm) Close() {
   <-self.stoppedSender
   <-self.stoppedAck
   close(self.sendQueue)
+  close(self.ackQueue)
   self.IsClosed = true
 }
 
