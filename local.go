@@ -129,7 +129,7 @@ func main() {
       sig := ev.Data[0]
       if sig == sigClose {
         serv := ev.Session.Obj.(*Serv)
-        time.AfterFunc(time.Second * 5, func() {
+        time.AfterFunc(time.Second * 3, func() {
           serv.clientConn.Close()
         })
         serv.remoteClosed = true

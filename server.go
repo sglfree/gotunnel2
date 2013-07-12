@@ -15,6 +15,7 @@ import (
   "net/http"
   "encoding/binary"
   "bytes"
+  "sync"
 )
 
 // configuration
@@ -102,6 +103,7 @@ type Serv struct {
   targetConn io.Writer
   localClosed bool
   remoteClosed bool
+  closeTargetConnOnce sync.Once
 }
 
 func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
@@ -158,8 +160,10 @@ func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
       if sig == sigClose {
         serv := ev.Session.Obj.(*Serv)
         if serv.targetConn != nil {
-          time.AfterFunc(time.Second * 5, func() {
-            serv.targetConn.(*net.TCPConn).Close()
+          time.AfterFunc(time.Second * 3, func() {
+            serv.closeTargetConnOnce.Do(func() {
+              serv.targetConn.(*net.TCPConn).Close()
+            })
           })
         }
         serv.remoteClosed = true
@@ -199,6 +203,9 @@ func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
   for _, session := range comm.Sessions {
     serv, ok := session.Obj.(*Serv)
     if ok {
+      serv.closeTargetConnOnce.Do(func() {
+        serv.targetConn.(*net.TCPConn).Close()
+      })
       closeServ(serv)
       fmt.Printf("closed serv %d\n", serv.session.Id)
     } else {
