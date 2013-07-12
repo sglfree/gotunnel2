@@ -91,7 +91,7 @@ func main() {
         c <- conn
       } else { // handle new comm
         connChangeChans[commId] = make(chan *net.TCPConn, 8)
-        startServ(conn, connChangeChans[commId])
+        handleClient(conn, connChangeChans[commId])
       }
     }()
   }
@@ -106,7 +106,7 @@ type Serv struct {
   closeTargetConnOnce sync.Once
 }
 
-func startServ(conn *net.TCPConn, connChange chan *net.TCPConn) {
+func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
   targetReader := cr.New()
   comm := session.NewComm(conn, []byte(globalConfig["key"]), nil)
   targetConnEvents := make(chan *Serv, 512)
