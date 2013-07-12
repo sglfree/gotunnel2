@@ -204,7 +204,9 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
     serv, ok := session.Obj.(*Serv)
     if ok {
       serv.closeTargetConnOnce.Do(func() {
-        serv.targetConn.(*net.TCPConn).Close()
+        if serv.targetConn != nil {
+          serv.targetConn.(*net.TCPConn).Close()
+        }
       })
       closeServ(serv)
       fmt.Printf("closed serv %d\n", serv.session.Id)
