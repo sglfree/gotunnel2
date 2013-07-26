@@ -23,7 +23,7 @@ const (
   SIGNAL
   ERROR
 
-  BUFFERED_CHAN_SIZE = 2048
+  BUFFERED_CHAN_SIZE = 4096
 )
 
 type Event struct {

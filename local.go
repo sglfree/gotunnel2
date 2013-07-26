@@ -10,6 +10,8 @@ import (
   "time"
   "math/rand"
   "encoding/binary"
+  _ "net/http/pprof"
+  "net/http"
 )
 
 // configuration
@@ -32,6 +34,9 @@ func init() {
   checkConfig("key")
 
   rand.Seed(time.Now().UnixNano())
+  go func() {
+    http.ListenAndServe("0.0.0.0:55556", nil)
+  }()
 }
 
 type Serv struct {
