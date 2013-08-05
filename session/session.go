@@ -35,12 +35,14 @@ func (self *Session) sendPacket(t uint8, data []byte) {
 
 func (self *Session) Send(data []byte) {
   self.sendPacket(typeData, data)
-  self.comm.readyToSend <- self
+  self.comm.readyToSend0 <- self
+  self.comm.readySig <- struct{}{}
 }
 
 func (self *Session) Signal(sig uint8) {
   self.sendPacket(typeSignal, []byte{sig})
-  self.comm.readyToSend <- self
+  self.comm.readyToSend0 <- self
+  self.comm.readySig <- struct{}{}
 }
 
 func (self *Session) Close() {

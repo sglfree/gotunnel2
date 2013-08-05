@@ -36,7 +36,10 @@ type Comm struct {
   IsClosed bool
   conn *net.TCPConn // tcp connection to other side
   Sessions map[int64]*Session // map session id to *Session
-  readyToSend chan *Session
+  readyToSend0 chan *Session
+  readyToSend1 chan *Session
+  readyToSend2 chan *Session
+  readySig chan struct{}
   ackQueue chan []byte // ack packet queue
   Events chan Event // events channel
   serial uint64 // next packet serial
@@ -72,7 +75,10 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   } else {
     c.Sessions = make(map[int64]*Session)
   }
-  c.readyToSend = make(chan *Session, BUFFERED_CHAN_SIZE)
+  c.readyToSend0 = make(chan *Session, BUFFERED_CHAN_SIZE)
+  c.readyToSend1 = make(chan *Session, BUFFERED_CHAN_SIZE)
+  c.readyToSend2 = make(chan *Session, BUFFERED_CHAN_SIZE)
+  c.readySig = make(chan struct{}, BUFFERED_CHAN_SIZE)
   c.ackQueue = make(chan []byte, BUFFERED_CHAN_SIZE)
   if ref != nil && ref.Events != nil {
     c.Events = ref.Events
@@ -129,19 +135,49 @@ func (self *Comm) nextSerial() uint64 {
 }
 
 func (self *Comm) startSender() {
-  for { select {
-  case session := <-self.readyToSend:
-    packet := <-session.sendQueue
-    self.conn.Write(packet.data)
-    self.BytesSent += uint64(len(packet.data))
-    self.packets.Enqueue(packet.serial, packet.data)
-  case data := <-self.ackQueue:
-    self.conn.Write(data)
-    self.BytesSent += uint64(len(data))
-  case <-self.stopSender:
-    close(self.stoppedSender)
-    return
-  }}
+  next: for {
+    <-self.readySig
+    select {
+    case <-self.stopSender:
+      close(self.stoppedSender)
+      return
+    default:
+      select {
+      case data := <-self.ackQueue:
+        self.conn.Write(data)
+        self.BytesSent += uint64(len(data))
+        continue next
+      default:
+        select {
+        case session := <-self.readyToSend0:
+          packet := <-session.sendQueue
+          self.conn.Write(packet.data)
+          self.BytesSent += uint64(len(packet.data))
+          self.packets.Enqueue(packet.serial, packet.data)
+          continue next
+        default:
+          select {
+          case session := <-self.readyToSend1:
+            packet := <-session.sendQueue
+            self.conn.Write(packet.data)
+            self.BytesSent += uint64(len(packet.data))
+            self.packets.Enqueue(packet.serial, packet.data)
+            continue next
+          default:
+            select {
+            case session := <-self.readyToSend2:
+              packet := <-session.sendQueue
+              self.conn.Write(packet.data)
+              self.BytesSent += uint64(len(packet.data))
+              self.packets.Enqueue(packet.serial, packet.data)
+              continue next
+            default:
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 func (self *Comm) startReader() {
@@ -229,6 +265,7 @@ func (self *Comm) startAck() {
     binary.Write(buf, binary.LittleEndian, rand.Int63())
     binary.Write(buf, binary.LittleEndian, typeAck)
     self.ackQueue <- buf.Bytes()
+    self.readySig <- struct{}{}
     lastAck = ackSerial
   case <-self.stopAck:
     close(self.stoppedAck)
@@ -239,11 +276,15 @@ func (self *Comm) startAck() {
 func (self *Comm) Close() {
   self.conn.Close()
   close(self.stopSender)
+  self.readySig <- struct{}{}
   close(self.stopAck)
   <-self.stoppedReader
   <-self.stoppedSender
   <-self.stoppedAck
-  close(self.readyToSend)
+  close(self.readyToSend0)
+  close(self.readyToSend1)
+  close(self.readyToSend2)
+  close(self.readySig)
   close(self.ackQueue)
   self.IsClosed = true
 }
@@ -266,7 +307,8 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
   }
   if isNew {
     session.sendPacket(typeConnect, data)
-    self.readyToSend <- session
+    self.readyToSend0 <- session
+    self.readySig <- struct{}{}
   }
   self.Sessions[id] = session
   return session
