@@ -7,7 +7,6 @@ import (
   "encoding/binary"
   "io"
   "fmt"
-  "sync/atomic"
   "bytes"
   "log"
   "crypto/aes"
@@ -42,13 +41,9 @@ type Comm struct {
   readySig chan struct{}
   ackQueue chan []byte // ack packet queue
   Events chan Event // events channel
-  serial uint64 // next packet serial
-  maxReceivedSerial uint64
-  maxAckSerial uint64
   key []byte // encryption key
   BytesSent uint64
   BytesReceived uint64
-  packets *RingQueue // packet buffer
   stopSender chan struct{} // chan to stop sender
   stopAck chan struct{} // chan to stop ack
   stoppedReader chan struct{}
@@ -85,15 +80,6 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   } else {
     c.Events = make(chan Event, BUFFERED_CHAN_SIZE)
   }
-  if ref != nil && ref.serial != 0 {
-    c.serial = ref.serial
-  }
-  if ref != nil && ref.maxReceivedSerial != 0 {
-    c.maxReceivedSerial = ref.maxReceivedSerial
-  }
-  if ref != nil && ref.maxAckSerial != 0 {
-    c.maxAckSerial = ref.maxAckSerial
-  }
   c.key = key
   _, err := aes.NewCipher(c.key)
   if err != nil { log.Fatal(err) }
@@ -103,11 +89,6 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   if ref != nil && ref.BytesReceived != 0 {
     c.BytesReceived = ref.BytesReceived
   }
-  if ref != nil && ref.packets != nil {
-    c.packets = ref.packets
-  } else {
-    c.packets = NewRing()
-  }
   c.stopSender = make(chan struct{})
   c.stopAck = make(chan struct{})
   c.stoppedReader = make(chan struct{})
@@ -116,8 +97,8 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   c.LastReadTime = time.Now()
 
   // resent not acked packet
-  if ref != nil && ref.packets != nil {
-    for p := ref.packets.tail; p != ref.packets.head; p = p.next {
+  for _, session := range c.Sessions {
+    for p := session.packets.tail; p != session.packets.head; p = p.next {
       c.conn.Write(p.data)
       c.BytesSent += uint64(len(p.data))
     }
@@ -128,10 +109,6 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   go c.startAck()
 
   return c
-}
-
-func (self *Comm) nextSerial() uint64 {
-  return atomic.AddUint64(&(self.serial), uint64(1))
 }
 
 func (self *Comm) startSender() {
@@ -148,7 +125,7 @@ func (self *Comm) startSender() {
         packet := <-session.sendQueue
         self.conn.Write(packet.data)
         self.BytesSent += uint64(len(packet.data))
-        self.packets.Enqueue(packet.serial, packet.data)
+        session.packets.Enqueue(packet.serial, packet.data)
         continue next
       default:
         select {
@@ -156,7 +133,7 @@ func (self *Comm) startSender() {
           packet := <-session.sendQueue
           self.conn.Write(packet.data)
           self.BytesSent += uint64(len(packet.data))
-          self.packets.Enqueue(packet.serial, packet.data)
+          session.packets.Enqueue(packet.serial, packet.data)
           continue next
         default:
           select {
@@ -164,7 +141,7 @@ func (self *Comm) startSender() {
             packet := <-session.sendQueue
             self.conn.Write(packet.data)
             self.BytesSent += uint64(len(packet.data))
-            self.packets.Enqueue(packet.serial, packet.data)
+            session.packets.Enqueue(packet.serial, packet.data)
             continue next
           default:
             select {
@@ -199,13 +176,21 @@ func (self *Comm) startReader() {
     if err != nil { return }
     self.BytesReceived += 1
     self.LastReadTime = time.Now() // update last read time
+    // get session
+    session, ok := self.Sessions[id]
+    if !ok && t == typeConnect { // new session
+      session = self.NewSession(id, nil, nil)
+    } else if !ok {
+      self.emit(Event{Type: ERROR, Session: &Session{Id: id}, Data: []byte("unregistered session id")})
+      return
+    }
     // is ack packet
     if t == typeAck {
-      self.maxAckSerial = serial
+      session.maxAckSerial = serial
       // clear packet buffer
-      for p := self.packets.Peek(); p != nil && p.serial <= serial; {
-        self.packets.Dequeue()
-        p = self.packets.Peek()
+      for p := session.packets.Peek(); p != nil && p.serial <= serial; {
+        session.packets.Dequeue()
+        p = session.packets.Peek()
       }
       continue loop
     }
@@ -219,8 +204,10 @@ func (self *Comm) startReader() {
       return
     }
     self.BytesReceived += uint64(n)
-    if serial <= self.maxReceivedSerial { continue loop } // duplicated packet
-    self.maxReceivedSerial = serial
+    if serial <= session.maxReceivedSerial { // duplicated packet
+      continue loop
+    }
+    session.maxReceivedSerial = serial
     // decrypt
     block, _ := aes.NewCipher(self.key)
     for i, size := aes.BlockSize, len(data); i < size; i += aes.BlockSize {
@@ -229,21 +216,10 @@ func (self *Comm) startReader() {
 
     switch t {
     case typeConnect:
-      session := self.NewSession(id, nil, nil)
       self.emit(Event{Type: SESSION, Session: session, Data: data})
     case typeData:
-      session, ok := self.Sessions[id]
-      if !ok {
-        self.emit(Event{Type: ERROR, Session: &Session{Id: id}, Data: []byte("unregistered session id")})
-        return
-      }
       self.emit(Event{Type: DATA, Session: session, Data: data})
     case typeSignal:
-      session, ok := self.Sessions[id]
-      if !ok {
-        self.emit(Event{Type: ERROR, Session: &Session{Id: id}, Data: []byte("unregistered session id")})
-        return
-      }
       self.emit(Event{Type: SIGNAL, Session: session, Data: data})
     default:
       self.emit(Event{Type: ERROR, Data: []byte(fmt.Sprintf("unrecognized packet type %s", t))})
@@ -253,20 +229,21 @@ func (self *Comm) startReader() {
 }
 
 func (self *Comm) startAck() {
-  var lastAck uint64
+  lastAck := make(map[int64]uint64)
   ticker := time.NewTicker(time.Millisecond * 500)
-  buf := new(bytes.Buffer)
   loop: for { select {
   case <-ticker.C:
-    ackSerial := self.maxReceivedSerial
-    if ackSerial == lastAck { continue loop }
-    buf.Reset()
-    binary.Write(buf, binary.LittleEndian, ackSerial)
-    binary.Write(buf, binary.LittleEndian, rand.Int63())
-    binary.Write(buf, binary.LittleEndian, typeAck)
-    self.ackQueue <- buf.Bytes()
-    self.readySig <- struct{}{}
-    lastAck = ackSerial
+    for sessionId, session := range self.Sessions {
+      ackSerial := session.maxReceivedSerial
+      if ackSerial == lastAck[sessionId] { continue loop }
+      buf := new(bytes.Buffer)
+      binary.Write(buf, binary.LittleEndian, ackSerial)
+      binary.Write(buf, binary.LittleEndian, sessionId)
+      binary.Write(buf, binary.LittleEndian, typeAck)
+      self.ackQueue <- buf.Bytes()
+      self.readySig <- struct{}{}
+      lastAck[sessionId] = ackSerial
+    }
   case <-self.stopAck:
     close(self.stoppedAck)
     return
@@ -304,6 +281,7 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
     comm: self,
     Obj: obj,
     sendQueue: make(chan Packet, 512),
+    packets: NewRing(),
   }
   if isNew {
     session.sendPacket(typeConnect, data)

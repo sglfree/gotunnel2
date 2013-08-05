@@ -4,6 +4,7 @@ import (
   "encoding/binary"
   "bytes"
   "crypto/aes"
+  "sync/atomic"
 )
 
 const OLD_SESSION_DATA_SENT = 1024 * 1024 * 8
@@ -14,12 +15,20 @@ type Session struct {
   Obj interface{}
   sendQueue chan Packet
   dataSent uint64
+  serial uint64 // next packet serial
+  maxReceivedSerial uint64
+  maxAckSerial uint64
+  packets *RingQueue // packet buffer
+}
+
+func (self *Session) nextSerial() uint64 {
+  return atomic.AddUint64(&(self.serial), uint64(1))
 }
 
 func (self *Session) sendPacket(t uint8, data []byte) {
   buf := new(bytes.Buffer)
   buf.Grow(len(data) + 8 + 8 + 1 + 4)
-  serial := self.comm.nextSerial()
+  serial := self.nextSerial()
   binary.Write(buf, binary.LittleEndian, serial)
   binary.Write(buf, binary.LittleEndian, self.Id)
   binary.Write(buf, binary.LittleEndian, t)
