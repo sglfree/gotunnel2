@@ -10,9 +10,10 @@ type Session struct {
   Id int64
   comm *Comm
   Obj interface{}
+  sendQueue chan Packet
 }
 
-func (self *Session) constructPacket(t uint8, data []byte) Packet {
+func (self *Session) sendPacket(t uint8, data []byte) {
   buf := new(bytes.Buffer)
   buf.Grow(len(data) + 8 + 8 + 1 + 4)
   serial := self.comm.nextSerial()
@@ -28,17 +29,21 @@ func (self *Session) constructPacket(t uint8, data []byte) Packet {
     buf.Write(v)
   }
   buf.Write(data[i - aes.BlockSize :])
-  return Packet{serial: serial, data: buf.Bytes()}
+  packet := Packet{serial: serial, data: buf.Bytes()}
+  self.sendQueue <- packet
 }
 
 func (self *Session) Send(data []byte) {
-  self.comm.sendQueue <- self.constructPacket(typeData, data)
+  self.sendPacket(typeData, data)
+  self.comm.readyToSend <- self
 }
 
 func (self *Session) Signal(sig uint8) {
-  self.comm.sendQueue <- self.constructPacket(typeSignal, []byte{sig})
+  self.sendPacket(typeSignal, []byte{sig})
+  self.comm.readyToSend <- self
 }
 
 func (self *Session) Close() {
+  close(self.sendQueue)
   delete(self.comm.Sessions, self.Id)
 }
