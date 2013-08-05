@@ -6,11 +6,14 @@ import (
   "crypto/aes"
 )
 
+const OLD_SESSION_DATA_SENT = 1024 * 1024 * 8
+
 type Session struct {
   Id int64
   comm *Comm
   Obj interface{}
   sendQueue chan Packet
+  dataSent uint64
 }
 
 func (self *Session) sendPacket(t uint8, data []byte) {
@@ -31,11 +34,18 @@ func (self *Session) sendPacket(t uint8, data []byte) {
   buf.Write(data[i - aes.BlockSize :])
   packet := Packet{serial: serial, data: buf.Bytes()}
   self.sendQueue <- packet
+  self.dataSent += uint64(len(data))
 }
 
 func (self *Session) Send(data []byte) {
   self.sendPacket(typeData, data)
-  self.comm.readyToSend0 <- self
+  if self.dataSent > OLD_SESSION_DATA_SENT {
+    self.comm.readyToSend2 <- self
+  } else if self.dataSent > 1024 * 16 {
+    self.comm.readyToSend1 <- self
+  } else {
+    self.comm.readyToSend0 <- self
+  }
   self.comm.readySig <- struct{}{}
 }
 
