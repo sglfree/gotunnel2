@@ -8,7 +8,7 @@ import (
   "fmt"
 )
 
-const OLD_SESSION_DATA_SENT = 1024 * 1024 * 8
+const OLD_SESSION_DATA_SENT = 1024 * 1024 * 4
 
 type Session struct {
   Id int64
