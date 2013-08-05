@@ -181,10 +181,8 @@ func (self *Comm) startReader() {
     if !ok && t == typeConnect { // new session
       session = self.NewSession(id, nil, nil)
     } else if !ok {
-      //self.emit(Event{Type: ERROR, Session: &Session{Id: id}, Data: []byte("unregistered session id")})
-      //return
-      // unregister id
-      continue loop
+      self.emit(Event{Type: ERROR, Session: &Session{Id: id}, Data: []byte(fmt.Sprintf("%d unregistered session id %d %d", id, t, serial))})
+      return
     }
     // is ack packet
     if t == typeAck {
@@ -237,7 +235,7 @@ func (self *Comm) startAck() {
   case <-ticker.C:
     for sessionId, session := range self.Sessions {
       ackSerial := session.maxReceivedSerial
-      if ackSerial == lastAck[sessionId] { continue loop }
+      if ackSerial == lastAck[sessionId] { continue }
       buf := new(bytes.Buffer)
       binary.Write(buf, binary.LittleEndian, ackSerial)
       binary.Write(buf, binary.LittleEndian, sessionId)
@@ -291,5 +289,6 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
     self.readySig <- struct{}{}
   }
   self.Sessions[id] = session
+  fmt.Printf("%d new session\n", session.Id)
   return session
 }

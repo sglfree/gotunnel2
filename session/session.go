@@ -5,6 +5,7 @@ import (
   "bytes"
   "crypto/aes"
   "sync/atomic"
+  "fmt"
 )
 
 const OLD_SESSION_DATA_SENT = 1024 * 1024 * 8
@@ -67,4 +68,5 @@ func (self *Session) Signal(sig uint8) {
 func (self *Session) Close() {
   close(self.sendQueue)
   delete(self.comm.Sessions, self.Id)
+  fmt.Printf("%d close session\n", self.Id)
 }
