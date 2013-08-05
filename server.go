@@ -172,6 +172,7 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
         ev.Session.Signal(sigPing)
       }
     case session.ERROR: // error
+      fmt.Printf("error! %s\n", ev.Data)
       break loop
     }
   // target connection events
