@@ -138,18 +138,21 @@ func (self *Comm) startSender() {
   next: for {
     <-self.readySig
     select {
-    case <-self.stopSender:
-      close(self.stoppedSender)
-      return
+    case data := <-self.ackQueue:
+      self.conn.Write(data)
+      self.BytesSent += uint64(len(data))
+      continue next
     default:
       select {
-      case data := <-self.ackQueue:
-        self.conn.Write(data)
-        self.BytesSent += uint64(len(data))
+      case session := <-self.readyToSend0:
+        packet := <-session.sendQueue
+        self.conn.Write(packet.data)
+        self.BytesSent += uint64(len(packet.data))
+        self.packets.Enqueue(packet.serial, packet.data)
         continue next
       default:
         select {
-        case session := <-self.readyToSend0:
+        case session := <-self.readyToSend1:
           packet := <-session.sendQueue
           self.conn.Write(packet.data)
           self.BytesSent += uint64(len(packet.data))
@@ -157,7 +160,7 @@ func (self *Comm) startSender() {
           continue next
         default:
           select {
-          case session := <-self.readyToSend1:
+          case session := <-self.readyToSend2:
             packet := <-session.sendQueue
             self.conn.Write(packet.data)
             self.BytesSent += uint64(len(packet.data))
@@ -165,12 +168,9 @@ func (self *Comm) startSender() {
             continue next
           default:
             select {
-            case session := <-self.readyToSend2:
-              packet := <-session.sendQueue
-              self.conn.Write(packet.data)
-              self.BytesSent += uint64(len(packet.data))
-              self.packets.Enqueue(packet.serial, packet.data)
-              continue next
+            case <-self.stopSender:
+              close(self.stoppedSender)
+              return
             default:
             }
           }
