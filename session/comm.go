@@ -231,7 +231,7 @@ func (self *Comm) startReader() {
 func (self *Comm) startAck() {
   lastAck := make(map[int64]uint64)
   ticker := time.NewTicker(time.Millisecond * 500)
-  loop: for { select {
+  for { select {
   case <-ticker.C:
     for sessionId, session := range self.Sessions {
       ackSerial := session.maxReceivedSerial
