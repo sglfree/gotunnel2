@@ -98,9 +98,9 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
 
   // resent not acked packet
   for _, session := range c.Sessions {
-    for p := session.packets.tail; p != session.packets.head; p = p.next {
-      c.conn.Write(p.data)
-      c.BytesSent += uint64(len(p.data))
+    for t, h := session.packets.tail, session.packets.head; t != h; t = t.next {
+      c.conn.Write(t.data)
+      c.BytesSent += uint64(len(t.data))
     }
   }
 
@@ -125,7 +125,7 @@ func (self *Comm) startSender() {
         packet := <-session.sendQueue
         self.conn.Write(packet.data)
         self.BytesSent += uint64(len(packet.data))
-        session.packets.Enqueue(packet.serial, packet.data)
+        session.packets.En(packet)
         continue next
       default:
         select {
@@ -133,7 +133,7 @@ func (self *Comm) startSender() {
           packet := <-session.sendQueue
           self.conn.Write(packet.data)
           self.BytesSent += uint64(len(packet.data))
-          session.packets.Enqueue(packet.serial, packet.data)
+          session.packets.En(packet)
           continue next
         default:
           select {
@@ -141,7 +141,7 @@ func (self *Comm) startSender() {
             packet := <-session.sendQueue
             self.conn.Write(packet.data)
             self.BytesSent += uint64(len(packet.data))
-            session.packets.Enqueue(packet.serial, packet.data)
+            session.packets.En(packet)
             continue next
           default:
             select {
@@ -191,9 +191,9 @@ func (self *Comm) startReader() {
     if t == typeAck {
       session.maxAckSerial = serial
       // clear packet buffer
-      for p := session.packets.Peek(); p != nil && p.serial <= serial; {
-        session.packets.Dequeue()
-        p = session.packets.Peek()
+      for p, h := session.packets.tail, session.packets.head; p != h && p.serial <= serial; {
+        session.packets.De()
+        p = session.packets.tail
       }
       continue loop
     }
@@ -283,8 +283,8 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
     Id: id,
     comm: self,
     Obj: obj,
-    sendQueue: make(chan Packet, 512),
-    packets: NewRing(),
+    sendQueue: make(chan *Packet, 512),
+    packets: NewQueue(),
   }
   if isNew {
     session.sendPacket(typeConnect, data)

@@ -14,12 +14,12 @@ type Session struct {
   Id int64
   comm *Comm
   Obj interface{}
-  sendQueue chan Packet
+  sendQueue chan *Packet
   dataSent uint64
   serial uint64 // next packet serial
   maxReceivedSerial uint64
   maxAckSerial uint64
-  packets *RingQueue // packet buffer
+  packets *Queue // packet buffer
 }
 
 func (self *Session) nextSerial() uint64 {
@@ -42,7 +42,7 @@ func (self *Session) sendPacket(t uint8, data []byte) {
     buf.Write(v)
   }
   buf.Write(data[i - aes.BlockSize :])
-  packet := Packet{serial: serial, data: buf.Bytes()}
+  packet := &Packet{serial: serial, data: buf.Bytes()}
   self.sendQueue <- packet
   self.dataSent += uint64(len(data))
 }
