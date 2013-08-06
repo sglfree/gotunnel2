@@ -50,7 +50,7 @@ func TestSession(t *testing.T) {
 
   n := 2048
   for i := 0; i < n; i++ {
-    s := bytes.Repeat([]byte(fmt.Sprintf("Hello, %d world!", i)), i)
+    s := bytes.Repeat([]byte(fmt.Sprintf("Hello, %d world!", i)), i * 2)
     session1.Send(s)
     select {
     case ev = <-comm2.Events:
