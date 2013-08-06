@@ -33,7 +33,6 @@ func (self *Session) sendPacket(t uint8, data []byte) {
   binary.Write(buf, binary.LittleEndian, serial)
   binary.Write(buf, binary.LittleEndian, self.Id)
   binary.Write(buf, binary.LittleEndian, t)
-  binary.Write(buf, binary.LittleEndian, uint32(len(data)))
   block, _ := aes.NewCipher(self.comm.key)
   v := make([]byte, aes.BlockSize)
   var i, size int
