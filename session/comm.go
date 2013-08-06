@@ -6,6 +6,7 @@ import (
   "time"
   "encoding/binary"
   "io"
+  "io/ioutil"
   "fmt"
   "bytes"
   "log"
@@ -167,7 +168,6 @@ func (self *Comm) startReader() {
   defer close(self.stoppedReader)
   var id int64
   var t uint8
-  var dataLen uint32
   var serial uint64
   var err error
   var packetLen uint32
@@ -214,15 +214,9 @@ func (self *Comm) startReader() {
     }
     session.maxReceivedSerial = serial
     // read data
-    err = binary.Read(r, binary.LittleEndian, &dataLen)
+    data, err := ioutil.ReadAll(r)
     if err != nil { return }
-    self.BytesReceived += 4
-    data := make([]byte, dataLen)
-    n, err = io.ReadFull(r, data)
-    if err != nil || uint32(n) != dataLen {
-      return
-    }
-    self.BytesReceived += uint64(n)
+    self.BytesReceived += uint64(len(data))
     // decrypt
     block, _ := aes.NewCipher(self.key)
     for i, size := aes.BlockSize, len(data); i < size; i += aes.BlockSize {
