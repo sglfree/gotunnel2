@@ -182,11 +182,7 @@ func (self *Comm) startReader() {
     if !ok && t == typeConnect { // new session
       session = self.NewSession(id, nil, nil)
     } else if !ok {
-      if t == typeAck {
-        continue loop
-      }
-      self.emit(Event{Type: ERROR, Session: &Session{Id: id}, Data: []byte(fmt.Sprintf("%d unregistered session id %d %d", id, t, serial))})
-      return
+      continue loop
     }
     // is ack packet
     if t == typeAck {
