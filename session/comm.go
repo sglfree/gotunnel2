@@ -56,6 +56,8 @@ type Packet struct {
   serial uint64
   data []byte
   next *Packet
+  createTime time.Time
+  sentTime time.Time
 }
 
 func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
@@ -111,6 +113,14 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   return c
 }
 
+func (self *Comm) sentSessionPacket(session *Session) {
+  packet := <-session.sendQueue
+  packet.sentTime = time.Now()
+  self.conn.Write(packet.data)
+  self.BytesSent += uint64(len(packet.data))
+  session.packets.En(packet)
+}
+
 func (self *Comm) startSender() {
   next: for {
     <-self.readySig
@@ -122,26 +132,17 @@ func (self *Comm) startSender() {
     default:
       select {
       case session := <-self.readyToSend0:
-        packet := <-session.sendQueue
-        self.conn.Write(packet.data)
-        self.BytesSent += uint64(len(packet.data))
-        session.packets.En(packet)
+        self.sentSessionPacket(session)
         continue next
       default:
         select {
         case session := <-self.readyToSend1:
-          packet := <-session.sendQueue
-          self.conn.Write(packet.data)
-          self.BytesSent += uint64(len(packet.data))
-          session.packets.En(packet)
+          self.sentSessionPacket(session)
           continue next
         default:
           select {
           case session := <-self.readyToSend2:
-            packet := <-session.sendQueue
-            self.conn.Write(packet.data)
-            self.BytesSent += uint64(len(packet.data))
-            session.packets.En(packet)
+            self.sentSessionPacket(session)
             continue next
           default:
             select {
@@ -192,6 +193,7 @@ func (self *Comm) startReader() {
       session.maxAckSerial = serial
       // clear packet buffer
       for p, h := session.packets.tail, session.packets.head; p != h && p.serial <= serial; {
+        info("%v %v\n", p.sentTime.Sub(p.createTime), time.Now().Sub(p.sentTime))
         session.packets.De()
         p = session.packets.tail
       }
@@ -292,6 +294,6 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
     self.readySig <- struct{}{}
   }
   self.Sessions[id] = session
-  fmt.Printf("%d new session\n", session.Id)
+  info("%d new session\n", session.Id)
   return session
 }

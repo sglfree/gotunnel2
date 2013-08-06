@@ -5,7 +5,7 @@ import (
   "bytes"
   "crypto/aes"
   "sync/atomic"
-  "fmt"
+  "time"
 )
 
 const OLD_SESSION_DATA_SENT = 1024 * 1024 * 4
@@ -42,7 +42,7 @@ func (self *Session) sendPacket(t uint8, data []byte) {
     buf.Write(v)
   }
   buf.Write(data[i - aes.BlockSize :])
-  packet := &Packet{serial: serial, data: buf.Bytes()}
+  packet := &Packet{serial: serial, data: buf.Bytes(), createTime: time.Now()}
   self.sendQueue <- packet
   self.dataSent += uint64(len(data))
 }
@@ -68,5 +68,5 @@ func (self *Session) Signal(sig uint8) {
 func (self *Session) Close() {
   close(self.sendQueue)
   delete(self.comm.Sessions, self.Id)
-  fmt.Printf("%d close session\n", self.Id)
+  info("%d close session\n", self.Id)
 }
