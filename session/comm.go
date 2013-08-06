@@ -6,7 +6,6 @@ import (
   "time"
   "encoding/binary"
   "io"
-  "io/ioutil"
   "fmt"
   "bytes"
   "log"
@@ -102,7 +101,7 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   // resent not acked packet
   for _, session := range c.Sessions {
     for t, h := session.packets.tail, session.packets.head; t != h; t = t.next {
-      c.write(t.data)
+      c.conn.Write(t.data)
       c.BytesSent += uint64(len(t.data))
     }
   }
@@ -114,15 +113,10 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   return c
 }
 
-func (self *Comm) write(data []byte) {
-  binary.Write(self.conn, binary.LittleEndian, uint32(len(data)))
-  self.conn.Write(data)
-}
-
 func (self *Comm) sentSessionPacket(session *Session) {
   packet := <-session.sendQueue
   packet.sentTime = time.Now()
-  self.write(packet.data)
+  self.conn.Write(packet.data)
   self.BytesSent += uint64(len(packet.data))
   session.packets.En(packet)
 }
@@ -132,7 +126,7 @@ func (self *Comm) startSender() {
     <-self.readySig
     select {
     case data := <-self.ackQueue:
-      self.write(data)
+      self.conn.Write(data)
       self.BytesSent += uint64(len(data))
       continue next
     default:
@@ -168,25 +162,18 @@ func (self *Comm) startReader() {
   defer close(self.stoppedReader)
   var id int64
   var t uint8
+  var dataLen uint32
   var serial uint64
   var err error
-  var packetLength uint32
   loop: for {
-    // read packet
-    err = binary.Read(self.conn, binary.LittleEndian, &packetLength)
-    if err != nil { return }
-    packetData := make([]byte, packetLength)
-    n, err := io.ReadFull(self.conn, packetData)
-    if uint32(n) != packetLength { return }
-    r := bytes.NewReader(packetData)
     // read header
-    err = binary.Read(r, binary.LittleEndian, &serial)
+    err = binary.Read(self.conn, binary.LittleEndian, &serial)
     if err != nil { return }
     self.BytesReceived += 8
-    err = binary.Read(r, binary.LittleEndian, &id)
+    err = binary.Read(self.conn, binary.LittleEndian, &id)
     if err != nil { return }
     self.BytesReceived += 8
-    err = binary.Read(r, binary.LittleEndian, &t)
+    err = binary.Read(self.conn, binary.LittleEndian, &t)
     if err != nil { return }
     self.BytesReceived += 1
     self.LastReadTime = time.Now() // update last read time
@@ -197,10 +184,6 @@ func (self *Comm) startReader() {
     } else if !ok {
       continue loop
     }
-    if serial <= session.maxReceivedSerial { // duplicated packet
-      continue loop
-    }
-    session.maxReceivedSerial = serial
     // is ack packet
     if t == typeAck {
       session.maxAckSerial = serial
@@ -212,10 +195,21 @@ func (self *Comm) startReader() {
       }
       continue loop
     }
-    // decrypt
-    data, err := ioutil.ReadAll(r)
+    // read data
+    err = binary.Read(self.conn, binary.LittleEndian, &dataLen)
     if err != nil { return }
-    self.BytesReceived += uint64(len(data))
+    self.BytesReceived += 4
+    data := make([]byte, dataLen)
+    n, err := io.ReadFull(self.conn, data)
+    if err != nil || uint32(n) != dataLen {
+      return
+    }
+    self.BytesReceived += uint64(n)
+    if serial <= session.maxReceivedSerial { // duplicated packet
+      continue loop
+    }
+    session.maxReceivedSerial = serial
+    // decrypt
     block, _ := aes.NewCipher(self.key)
     for i, size := aes.BlockSize, len(data); i < size; i += aes.BlockSize {
       block.Decrypt(data[i - aes.BlockSize : i], data[i - aes.BlockSize : i])
