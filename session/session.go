@@ -20,6 +20,7 @@ type Session struct {
   maxReceivedSerial uint32
   maxAckSerial uint32
   packets *Queue // packet buffer
+  StartTime time.Time
 }
 
 func (self *Session) nextSerial() uint32 {

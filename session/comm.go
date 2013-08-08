@@ -316,6 +316,7 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
     Obj: obj,
     sendQueue: make(chan *Packet, 512),
     packets: NewQueue(),
+    StartTime: time.Now(),
   }
   if isNew {
     session.sendPacket(typeConnect, data)
