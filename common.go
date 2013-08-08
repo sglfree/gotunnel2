@@ -166,8 +166,17 @@ func (self *Printer) Reset() {
 func (self *Printer) Print(format string, args ...interface{}) {
   x := self.x
   for _, c := range fmt.Sprintf(format, args...) {
+    cwidth := rune_width(c)
+    if x + cwidth > self.w { // next line
+      x = 0
+      self.y += 1
+    }
     box.SetCell(x, self.y, c, box.ColorWhite, box.ColorDefault)
     x += rune_width(c)
+    if x >= self.w {
+      x = 0
+      self.y += 1
+    }
   }
   self.y += 1
   if self.y >= self.h {
