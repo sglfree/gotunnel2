@@ -6,7 +6,6 @@ import (
   "time"
   "encoding/binary"
   "io"
-  "io/ioutil"
   "fmt"
   "bytes"
   "log"
@@ -171,24 +170,29 @@ func (self *Comm) startReader() {
   var serial uint64
   var err error
   var packetLen uint32
+  discardBuffer := make([]byte, 65536)
+  var n int
   loop: for {
     // read packet
+    if packetLen > 0 {
+      n, _ = io.ReadFull(self.conn, discardBuffer[:packetLen])
+      if uint32(n) != packetLen { return }
+    }
     err = binary.Read(self.conn, binary.LittleEndian, &packetLen)
     if err != nil { return }
-    packetData := make([]byte, packetLen)
-    n, err := io.ReadFull(self.conn, packetData)
-    if uint32(n) != packetLen { return }
-    r := bytes.NewReader(packetData)
     // read header
-    err = binary.Read(r, binary.LittleEndian, &serial)
+    err = binary.Read(self.conn, binary.LittleEndian, &serial)
     if err != nil { return }
     self.BytesReceived += 8
-    err = binary.Read(r, binary.LittleEndian, &id)
+    packetLen -= 8
+    err = binary.Read(self.conn, binary.LittleEndian, &id)
     if err != nil { return }
     self.BytesReceived += 8
-    err = binary.Read(r, binary.LittleEndian, &t)
+    packetLen -= 8
+    err = binary.Read(self.conn, binary.LittleEndian, &t)
     if err != nil { return }
     self.BytesReceived += 1
+    packetLen -= 1
     self.LastReadTime = time.Now() // update last read time
     // get session
     session, ok := self.Sessions[id]
@@ -214,9 +218,11 @@ func (self *Comm) startReader() {
     }
     session.maxReceivedSerial = serial
     // read data
-    data, err := ioutil.ReadAll(r)
-    if err != nil { return }
-    self.BytesReceived += uint64(len(data))
+    data := make([]byte, packetLen)
+    n, _ = io.ReadFull(self.conn, data)
+    if uint32(n) != packetLen { return }
+    self.BytesReceived += uint64(packetLen)
+    packetLen = 0
     // decrypt
     block, _ := aes.NewCipher(self.key)
     for i, size := aes.BlockSize, len(data); i < size; i += aes.BlockSize {
