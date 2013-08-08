@@ -17,6 +17,7 @@ import (
   "bytes"
   "sync"
   "runtime"
+  "fmt"
 )
 
 // configuration
@@ -147,10 +148,11 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
       break loop
     }
     box.Clear(box.ColorDefault, box.ColorDefault)
+    printer.Reset()
     runtime.ReadMemStats(&memStats)
     printer.Print("%s in use", formatFlow(memStats.Alloc))
     printer.Print("%s obtained", formatFlow(memStats.Sys))
-    printer.Reset()
+    printer.Print(fmt.Sprintf("%v", memStats))
     box.Flush()
   // conn change
   case conn := <-connChange:
