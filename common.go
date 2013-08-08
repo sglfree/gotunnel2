@@ -1,6 +1,7 @@
 package main
 
 import (
+  box "github.com/nsf/termbox-go"
   "io/ioutil"
   "os/user"
   "log"
@@ -14,6 +15,8 @@ import (
   "crypto/aes"
   "errors"
   "math/rand"
+  "reflect"
+  "sort"
 )
 
 func init() {
@@ -120,3 +123,89 @@ func genRandBytes(n int) []byte {
 //  if err != nil { log.Fatal(err) }
 //  fmt.Printf("%x\n%x\n", in, enc)
 //}
+
+// from godit
+func rune_width(r rune) int {
+  if r >= 0x1100 &&
+  (r <= 0x115f || r == 0x2329 || r == 0x232a ||
+  (r >= 0x2e80 && r <= 0xa4cf && r != 0x303f) ||
+  (r >= 0xac00 && r <= 0xd7a3) ||
+  (r >= 0xf900 && r <= 0xfaff) ||
+  (r >= 0xfe30 && r <= 0xfe6f) ||
+  (r >= 0xff00 && r <= 0xff60) ||
+  (r >= 0xffe0 && r <= 0xffe6) ||
+  (r >= 0x20000 && r <= 0x2fffd) ||
+  (r >= 0x30000 && r <= 0x3fffd)) {
+    return 2
+  }
+  return 1
+}
+
+type Point struct {
+  x int
+  y int
+}
+
+type Output struct {
+  buffer map[Point]string
+}
+
+func NewOutput() *Output {
+  return &Output{
+    buffer: make(map[Point]string),
+  }
+}
+
+func (self *Output) Set(x, y int, format string, args ...interface{}) {
+  _, h := box.Size()
+  if y >= h { return }
+  self.buffer[Point{x, y}] = fmt.Sprintf(format, args...)
+}
+
+func (self *Output) Flush() {
+  box.Clear(box.ColorDefault, box.ColorDefault)
+  for p, s := range self.buffer {
+    x := p.x
+    for _, c := range s {
+      box.SetCell(x, p.y, c, box.ColorWhite, box.ColorDefault)
+      x += rune_width(c)
+    }
+  }
+  box.Flush()
+}
+
+type sortByValue struct {
+  m interface{}
+  key reflect.Value
+  fun func(a, b reflect.Value) bool
+}
+
+func (self *sortByValue) Len() int {
+  return reflect.ValueOf(self.m).Len()
+}
+
+func (self *sortByValue) Less(i, j int) bool {
+  v := reflect.ValueOf(self.m)
+  return self.fun(v.MapIndex(self.key.Index(i)),
+  v.MapIndex(self.key.Index(j)))
+}
+
+func (self *sortByValue) Swap(i, j int) {
+  tmp := reflect.ValueOf(self.key.Index(i).Interface())
+  self.key.Index(i).Set(self.key.Index(j))
+  self.key.Index(j).Set(tmp)
+}
+
+func ByValue(m interface{}, fun func(a, b reflect.Value) bool) reflect.Value {
+  sm := new(sortByValue)
+  sm.m = m
+  sm.fun = fun
+  t := reflect.TypeOf(m)
+  v := reflect.ValueOf(m)
+  sm.key = reflect.MakeSlice(reflect.SliceOf(t.Key()), 0, v.Len())
+  for _, key := range v.MapKeys() {
+    sm.key = reflect.Append(sm.key, key)
+  }
+  sort.Sort(sm)
+  return sm.key
+}

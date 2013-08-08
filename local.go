@@ -1,6 +1,7 @@
 package main
 
 import (
+  box "github.com/nsf/termbox-go"
   "log"
   "fmt"
   "./socks"
@@ -12,6 +13,8 @@ import (
   "encoding/binary"
   _ "net/http/pprof"
   "net/http"
+  "os"
+  "reflect"
 )
 
 // configuration
@@ -48,12 +51,27 @@ type Serv struct {
 }
 
 func main() {
+  // termbox
+  err := box.Init()
+  if err != nil { log.Fatal(err) }
+  defer box.Close()
+  output := NewOutput()
+  go func() { for {
+    ev := box.PollEvent()
+    if ev.Type == box.EventKey {
+      if ev.Key == box.KeyEsc {
+        os.Exit(0)
+      }
+    } else if ev.Type == box.EventResize {
+      output.Flush()
+    }
+  }}()
   // socks5 server
   socksServer, err := socks.New(globalConfig["local"])
   if err != nil {
     log.Fatal(err)
   }
-  fmt.Printf("socks server listening on %s\n", globalConfig["local"])
+  output.Set(0, 0, "listening %v", globalConfig["local"])
   clientReader := cr.New()
 
   // connect to remote server
@@ -64,7 +82,7 @@ func main() {
   getServerConn := func() *net.TCPConn {
     serverConn, err := net.DialTCP("tcp", nil, addr)
     if err != nil { log.Fatal("cannot connect to remote server ", err) }
-    fmt.Printf("connected to server %v\n", serverConn.RemoteAddr())
+    output.Set(0, 1, "connected %v", serverConn.RemoteAddr())
     // auth
     origin := genRandBytes(64)
     encrypted, err := encrypt(cipherKey, origin)
@@ -85,11 +103,14 @@ func main() {
   keepaliveTicker := time.NewTicker(PING_INTERVAL)
 
   // heartbeat
-  heartbeat := time.NewTicker(time.Second * 2)
+  heartbeat := time.NewTicker(time.Second * 1)
   t1 := time.Now()
   delta := func() string {
-    return fmt.Sprintf("%7.0fs", time.Now().Sub(t1).Seconds())
+    return fmt.Sprintf("%-.0fs", time.Now().Sub(t1).Seconds())
   }
+
+  output.Set(0, 3, "--- sessions ---")
+  output.Flush()
 
   for { select {
   // ping
@@ -97,11 +118,21 @@ func main() {
     keepaliveSession.Signal(sigPing)
   // heartbeat
   case <-heartbeat.C:
-    fmt.Printf("%s %20s >< %-20s\n", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
+    output.Set(0, 2, "%s %s >< %s", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
     if time.Now().Sub(comm.LastReadTime) > BAD_CONN_THRESHOLD {
-      fmt.Printf("connection gone bad, reconnecting\n")
       comm = session.NewComm(getServerConn(), cipherKey, comm)
     }
+    y := 4
+    for _, sessionId := range ByValue(comm.Sessions, func(a, b reflect.Value) bool {
+      return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
+    }).Interface().([]int64) {
+      session := comm.Sessions[sessionId]
+      serv, ok := session.Obj.(*Serv)
+      if !ok { continue }
+      output.Set(0, y, serv.hostPort)
+      y += 1
+    }
+    output.Flush()
   // new socks client
   case socksClient := <-socksServer.Clients:
     serv := &Serv{
@@ -110,7 +141,6 @@ func main() {
     }
     serv.session = comm.NewSession(-1, []byte(socksClient.HostPort), serv)
     clientReader.Add(socksClient.Conn, serv)
-    fmt.Printf("new client to %s\n", socksClient.HostPort)
   // client events
   case ev := <-clientReader.Events:
     serv := ev.Obj.(*Serv)
@@ -149,5 +179,4 @@ func main() {
 
 func closeServ(serv *Serv) {
  serv.session.Close()
- fmt.Printf("client to %s closed\n", serv.hostPort)
 }
