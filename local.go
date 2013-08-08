@@ -55,15 +55,12 @@ func main() {
   err := box.Init()
   if err != nil { log.Fatal(err) }
   defer box.Close()
-  output := NewOutput()
   go func() { for {
     ev := box.PollEvent()
     if ev.Type == box.EventKey {
       if ev.Key == box.KeyEsc {
         os.Exit(0)
       }
-    } else if ev.Type == box.EventResize {
-      output.Flush()
     }
   }}()
   // socks5 server
@@ -71,7 +68,6 @@ func main() {
   if err != nil {
     log.Fatal(err)
   }
-  output.Set(0, 0, "listening %v", globalConfig["local"])
   clientReader := cr.New()
 
   // connect to remote server
@@ -82,7 +78,6 @@ func main() {
   getServerConn := func() *net.TCPConn {
     serverConn, err := net.DialTCP("tcp", nil, addr)
     if err != nil { log.Fatal("cannot connect to remote server ", err) }
-    output.Set(0, 1, "connected %v", serverConn.RemoteAddr())
     // auth
     origin := genRandBytes(64)
     encrypted, err := encrypt(cipherKey, origin)
@@ -109,30 +104,37 @@ func main() {
     return fmt.Sprintf("%-.0fs", time.Now().Sub(t1).Seconds())
   }
 
-  output.Set(0, 3, "--- sessions ---")
-  output.Flush()
-
   for { select {
   // ping
   case <-keepaliveTicker.C:
     keepaliveSession.Signal(sigPing)
   // heartbeat
   case <-heartbeat.C:
-    output.Set(0, 2, "%s %s >< %s", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
+    box.Clear(box.ColorDefault, box.ColorDefault)
+    pstr(0, 0, "listening %v", globalConfig["local"])
+    pstr(0, 1, "connected %v", addr)
+    pstr(0, 2, "%s %s >< %s", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
+    pstr(0, 3, "--- sessions ---")
     if time.Now().Sub(comm.LastReadTime) > BAD_CONN_THRESHOLD {
       comm = session.NewComm(getServerConn(), cipherKey, comm)
     }
     y := 4
+    x := 0
+    _, h := box.Size()
     for _, sessionId := range ByValue(comm.Sessions, func(a, b reflect.Value) bool {
       return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
     }).Interface().([]int64) {
       session := comm.Sessions[sessionId]
       serv, ok := session.Obj.(*Serv)
       if !ok { continue }
-      output.Set(0, y, serv.hostPort)
+      pstr(x, y, serv.hostPort)
       y += 1
+      if y == h {
+        x += 40
+        y = 0
+      }
     }
-    output.Flush()
+    box.Flush()
   // new socks client
   case socksClient := <-socksServer.Clients:
     serv := &Serv{

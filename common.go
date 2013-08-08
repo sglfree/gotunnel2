@@ -141,37 +141,11 @@ func rune_width(r rune) int {
   return 1
 }
 
-type Point struct {
-  x int
-  y int
-}
-
-type Output struct {
-  buffer map[Point]string
-}
-
-func NewOutput() *Output {
-  return &Output{
-    buffer: make(map[Point]string),
+func pstr(x, y int, format string, args ...interface{}) {
+  for _, c := range fmt.Sprintf(format, args...) {
+    box.SetCell(x, y, c, box.ColorWhite, box.ColorDefault)
+    x += rune_width(c)
   }
-}
-
-func (self *Output) Set(x, y int, format string, args ...interface{}) {
-  _, h := box.Size()
-  if y >= h { return }
-  self.buffer[Point{x, y}] = fmt.Sprintf(format, args...)
-}
-
-func (self *Output) Flush() {
-  box.Clear(box.ColorDefault, box.ColorDefault)
-  for p, s := range self.buffer {
-    x := p.x
-    for _, c := range s {
-      box.SetCell(x, p.y, c, box.ColorWhite, box.ColorDefault)
-      x += rune_width(c)
-    }
-  }
-  box.Flush()
 }
 
 type sortByValue struct {
