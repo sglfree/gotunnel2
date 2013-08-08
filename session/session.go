@@ -16,19 +16,19 @@ type Session struct {
   Obj interface{}
   sendQueue chan *Packet
   dataSent uint64
-  serial uint64 // next packet serial
-  maxReceivedSerial uint64
-  maxAckSerial uint64
+  serial uint32 // next packet serial
+  maxReceivedSerial uint32
+  maxAckSerial uint32
   packets *Queue // packet buffer
 }
 
-func (self *Session) nextSerial() uint64 {
-  return atomic.AddUint64(&(self.serial), uint64(1))
+func (self *Session) nextSerial() uint32 {
+  return atomic.AddUint32(&(self.serial), uint32(1))
 }
 
 func (self *Session) sendPacket(t uint8, data []byte) {
   buf := new(bytes.Buffer)
-  buf.Grow(len(data) + 8 + 8 + 1 + 4)
+  buf.Grow(len(data) + 4 + 8 + 1)
   serial := self.nextSerial()
   binary.Write(buf, binary.LittleEndian, serial)
   binary.Write(buf, binary.LittleEndian, self.Id)

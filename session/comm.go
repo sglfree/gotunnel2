@@ -23,6 +23,7 @@ const (
   ERROR
 
   BUFFERED_CHAN_SIZE = 4096
+  MAX_DATA_LENGTH = 1 << 16 - 1
 )
 
 type Event struct {
@@ -53,7 +54,7 @@ type Comm struct {
 }
 
 type Packet struct {
-  serial uint64
+  serial uint32
   data []byte
   next *Packet
   createTime time.Time
@@ -114,7 +115,11 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
 }
 
 func (self *Comm) write(data []byte) {
-  binary.Write(self.conn, binary.LittleEndian, uint32(len(data)))
+  l := len(data)
+  if l > MAX_DATA_LENGTH {
+    log.Fatal("data too long")
+  }
+  binary.Write(self.conn, binary.LittleEndian, uint16(l))
   self.conn.Write(data)
 }
 
@@ -167,24 +172,24 @@ func (self *Comm) startReader() {
   defer close(self.stoppedReader)
   var id int64
   var t uint8
-  var serial uint64
+  var serial uint32
   var err error
-  var packetLen uint32
-  discardBuffer := make([]byte, 65536)
+  var packetLen uint16
+  discardBuffer := make([]byte, MAX_DATA_LENGTH + 1)
   var n int
   loop: for {
     // read packet
     if packetLen > 0 {
       n, _ = io.ReadFull(self.conn, discardBuffer[:packetLen])
-      if uint32(n) != packetLen { return }
+      if uint16(n) != packetLen { return }
     }
     err = binary.Read(self.conn, binary.LittleEndian, &packetLen)
     if err != nil { return }
     // read header
     err = binary.Read(self.conn, binary.LittleEndian, &serial)
     if err != nil { return }
-    self.BytesReceived += 8
-    packetLen -= 8
+    self.BytesReceived += 4
+    packetLen -= 4
     err = binary.Read(self.conn, binary.LittleEndian, &id)
     if err != nil { return }
     self.BytesReceived += 8
@@ -220,7 +225,7 @@ func (self *Comm) startReader() {
     // read data
     data := make([]byte, packetLen)
     n, _ = io.ReadFull(self.conn, data)
-    if uint32(n) != packetLen { return }
+    if uint16(n) != packetLen { return }
     self.BytesReceived += uint64(packetLen)
     packetLen = 0
     // decrypt
@@ -244,7 +249,7 @@ func (self *Comm) startReader() {
 }
 
 func (self *Comm) startAck() {
-  lastAck := make(map[int64]uint64)
+  lastAck := make(map[int64]uint32)
   ticker := time.NewTicker(time.Millisecond * 500)
   for { select {
   case <-ticker.C:

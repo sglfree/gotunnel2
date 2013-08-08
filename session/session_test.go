@@ -50,7 +50,7 @@ func TestSession(t *testing.T) {
 
   n := 2048
   for i := 0; i < n; i++ {
-    s := bytes.Repeat([]byte(fmt.Sprintf("Hello, %d world!", i)), i * 2)
+    s := bytes.Repeat([]byte(fmt.Sprintf("Hello, %d world!", i)), i)
     session1.Send(s)
     select {
     case ev = <-comm2.Events:
@@ -76,7 +76,7 @@ func TestSession(t *testing.T) {
     t.Fatal("event not match here")
   }
 
-  if session2.maxReceivedSerial < uint64(n) {
+  if session2.maxReceivedSerial < uint32(n) {
     t.Fatal("serial not match")
   }
 
