@@ -141,10 +141,38 @@ func rune_width(r rune) int {
   return 1
 }
 
-func pstr(x, y int, format string, args ...interface{}) {
+type Printer struct {
+  x int
+  y int
+  w int
+  h int
+  lineWidth int
+}
+
+func NewPrinter(lineWidth int) *Printer {
+  ret := &Printer{
+    lineWidth: lineWidth,
+  }
+  ret.w, ret.h = box.Size()
+  return ret
+}
+
+func (self *Printer) Reset() {
+  self.x = 0
+  self.y = 0
+  self.w, self.h = box.Size()
+}
+
+func (self *Printer) Print(format string, args ...interface{}) {
+  x := self.x
   for _, c := range fmt.Sprintf(format, args...) {
-    box.SetCell(x, y, c, box.ColorWhite, box.ColorDefault)
+    box.SetCell(x, self.y, c, box.ColorWhite, box.ColorDefault)
     x += rune_width(c)
+  }
+  self.y += 1
+  if self.y >= self.h {
+    self.y = 0
+    self.x += self.lineWidth
   }
 }
 

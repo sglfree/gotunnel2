@@ -1,9 +1,9 @@
 package main
 
 import (
+  box "github.com/nsf/termbox-go"
   "net"
   "log"
-  "fmt"
   cr "./conn_reader"
   "./session"
   "time"
@@ -16,6 +16,7 @@ import (
   "encoding/binary"
   "bytes"
   "sync"
+  "runtime"
 )
 
 // configuration
@@ -40,6 +41,19 @@ func init() {
 }
 
 func main() {
+  // termbox
+  err := box.Init()
+  if err != nil { log.Fatal(err) }
+  defer box.Close()
+  go func() { for {
+    ev := box.PollEvent()
+    if ev.Type == box.EventKey {
+      if ev.Key == box.KeyEsc {
+        os.Exit(0)
+      }
+    }
+  }}()
+
   go func() { // profile
     profileTicker := time.NewTicker(time.Second * 30)
     for _ = range profileTicker.C {
@@ -54,7 +68,6 @@ func main() {
   if err != nil { log.Fatal("cannot resolve listen address ", err) }
   ln, err := net.ListenTCP("tcp", addr)
   if err != nil { log.Fatal("cannot listen ", err) }
-  fmt.Printf("server listening on %v\n", ln.Addr())
   connChangeChans := make(map[int64]chan *net.TCPConn)
   for {
     conn, err := ln.AcceptTCP()
@@ -123,7 +136,9 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
     return
   }
 
-  heartbeat := time.NewTicker(time.Minute * 5)
+  heartbeat := time.NewTicker(time.Second * 1)
+  var memStats runtime.MemStats
+  printer := NewPrinter(40)
 
   loop: for { select {
   // heartbeat
@@ -131,6 +146,12 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
     if time.Now().Sub(comm.LastReadTime) > time.Minute * 5 {
       break loop
     }
+    box.Clear(box.ColorDefault, box.ColorDefault)
+    runtime.ReadMemStats(&memStats)
+    printer.Print("%s in use", formatFlow(memStats.Alloc))
+    printer.Print("%s obtained", formatFlow(memStats.Sys))
+    printer.Reset()
+    box.Flush()
   // conn change
   case conn := <-connChange:
     comm = session.NewComm(conn, []byte(globalConfig["key"]), comm)
@@ -172,7 +193,6 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
         ev.Session.Signal(sigPing)
       }
     case session.ERROR: // error
-      fmt.Printf("error! %s\n", ev.Data)
       break loop
     }
   // target connection events
@@ -210,14 +230,11 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
         }
       })
       closeServ(serv)
-      fmt.Printf("closed serv %d\n", serv.session.Id)
     } else {
-      fmt.Printf("closed session %d\n", session.Id)
       session.Close()
     }
   }
   comm.Close()
-  fmt.Printf("comm closed\n")
 }
 
 func closeServ(serv *Serv) {

@@ -15,6 +15,7 @@ import (
   "net/http"
   "os"
   "reflect"
+  "runtime"
 )
 
 // configuration
@@ -104,6 +105,9 @@ func main() {
     return fmt.Sprintf("%-.0fs", time.Now().Sub(t1).Seconds())
   }
 
+  var memStats runtime.MemStats
+  printer := NewPrinter(40)
+
   for { select {
   // ping
   case <-keepaliveTicker.C:
@@ -111,28 +115,24 @@ func main() {
   // heartbeat
   case <-heartbeat.C:
     box.Clear(box.ColorDefault, box.ColorDefault)
-    pstr(0, 0, "listening %v", globalConfig["local"])
-    pstr(0, 1, "connected %v", addr)
-    pstr(0, 2, "%s %s >< %s", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
-    pstr(0, 3, "--- sessions ---")
+    printer.Reset()
+    printer.Print("listening %v", globalConfig["local"])
+    printer.Print("connected %v", addr)
+    printer.Print("%s %s >< %s", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
     if time.Now().Sub(comm.LastReadTime) > BAD_CONN_THRESHOLD {
       comm = session.NewComm(getServerConn(), cipherKey, comm)
     }
-    y := 4
-    x := 0
-    _, h := box.Size()
+    runtime.ReadMemStats(&memStats)
+    printer.Print("%s in use", formatFlow(memStats.Alloc))
+    printer.Print("%s obtained", formatFlow(memStats.Sys))
+    printer.Print("--- sessions ---")
     for _, sessionId := range ByValue(comm.Sessions, func(a, b reflect.Value) bool {
       return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
     }).Interface().([]int64) {
       session := comm.Sessions[sessionId]
       serv, ok := session.Obj.(*Serv)
       if !ok { continue }
-      pstr(x, y, serv.hostPort)
-      y += 1
-      if y == h {
-        x += 40
-        y = 0
-      }
+      printer.Print(serv.hostPort)
     }
     box.Flush()
   // new socks client
