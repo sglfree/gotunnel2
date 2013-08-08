@@ -77,7 +77,11 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   c.readyToSend1 = make(chan *Session, BUFFERED_CHAN_SIZE)
   c.readyToSend2 = make(chan *Session, BUFFERED_CHAN_SIZE)
   c.readySig = make(chan struct{}, BUFFERED_CHAN_SIZE)
-  c.ackQueue = make(chan []byte, BUFFERED_CHAN_SIZE)
+  if ref != nil && ref.ackQueue != nil {
+    c.ackQueue = ref.ackQueue
+  } else {
+    c.ackQueue = make(chan []byte, BUFFERED_CHAN_SIZE)
+  }
   if ref != nil && ref.Events != nil {
     c.Events = ref.Events
   } else {
@@ -99,6 +103,17 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   c.stoppedAck = make(chan struct{})
   c.LastReadTime = time.Now()
 
+  go c.startReader()
+
+  ack_loop: for {
+    select {
+    case data := <-c.ackQueue:
+      c.write(data)
+    default:
+      break ack_loop
+    }
+  }
+
   // resent not acked packet
   for _, session := range c.Sessions {
     for t, h := session.packets.tail, session.packets.head; t != h; t = t.next {
@@ -108,7 +123,6 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   }
 
   go c.startSender()
-  go c.startReader()
   go c.startAck()
 
   return c
@@ -282,7 +296,7 @@ func (self *Comm) Close() {
   close(self.readyToSend1)
   close(self.readyToSend2)
   close(self.readySig)
-  close(self.ackQueue)
+  //close(self.ackQueue)
   self.IsClosed = true
 }
 
