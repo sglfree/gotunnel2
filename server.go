@@ -17,7 +17,7 @@ import (
   "bytes"
   "sync"
   "runtime"
-  "fmt"
+  "reflect"
 )
 
 // configuration
@@ -118,6 +118,7 @@ type Serv struct {
   localClosed bool
   remoteClosed bool
   closeTargetConnOnce sync.Once
+  hostPort string
 }
 
 func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
@@ -151,8 +152,15 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
     printer.Reset()
     runtime.ReadMemStats(&memStats)
     printer.Print("%s in use", formatFlow(memStats.Alloc))
-    printer.Print("%s obtained", formatFlow(memStats.Sys))
-    printer.Print(fmt.Sprintf("%v", memStats))
+    printer.Print("--- sessions ---")
+    for _, sessionId := range ByValue(comm.Sessions, func(a, b reflect.Value) bool {
+      return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
+    }).Interface().([]int64) {
+      session := comm.Sessions[sessionId]
+      serv, ok := session.Obj.(*Serv)
+      if !ok { continue }
+      printer.Print(serv.hostPort)
+    }
     box.Flush()
   // conn change
   case conn := <-connChange:
@@ -167,6 +175,7 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
       }
       serv := &Serv{
         sendQueue: make([][]byte, 0, 8),
+        hostPort: hostPort,
       }
       serv.session = ev.Session
       ev.Session.Obj = serv
