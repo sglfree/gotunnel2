@@ -16,6 +16,7 @@ import (
   "os"
   "reflect"
   "runtime"
+  "sync"
 )
 
 // configuration
@@ -49,6 +50,7 @@ type Serv struct {
   hostPort string
   localClosed bool
   remoteClosed bool
+  closeOnce sync.Once
 }
 
 func main() {
@@ -152,7 +154,7 @@ func main() {
     case cr.EOF, cr.ERROR: // client close
       serv.session.Signal(sigClose)
       serv.localClosed = true
-      if serv.remoteClosed { closeServ(serv) }
+      if serv.remoteClosed { serv.Close() }
     }
   // server events
   case ev := <-comm.Events:
@@ -170,7 +172,7 @@ func main() {
           serv.clientConn.Close()
         })
         serv.remoteClosed = true
-        if serv.localClosed { closeServ(serv) }
+        if serv.localClosed { serv.Close() }
       } else if sig == sigPing {
       }
     case session.ERROR:
@@ -179,6 +181,8 @@ func main() {
   }}
 }
 
-func closeServ(serv *Serv) {
- serv.session.Close()
+func (self *Serv) Close() {
+  self.closeOnce.Do(func() {
+    self.session.Close()
+  })
 }
