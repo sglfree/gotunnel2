@@ -6,6 +6,7 @@ import (
   "time"
   "encoding/binary"
   "io"
+  "bufio"
   "fmt"
   "bytes"
   "log"
@@ -191,24 +192,25 @@ func (self *Comm) startReader() {
   var packetLen uint16
   discardBuffer := make([]byte, MAX_DATA_LENGTH + 1)
   var n int
+  connReader := bufio.NewReaderSize(self.conn, 65536)
   loop: for {
     // read packet
     if packetLen > 0 {
-      n, _ = io.ReadFull(self.conn, discardBuffer[:packetLen])
+      n, _ = io.ReadFull(connReader, discardBuffer[:packetLen])
       if uint16(n) != packetLen { return }
     }
-    err = binary.Read(self.conn, binary.LittleEndian, &packetLen)
+    err = binary.Read(connReader, binary.LittleEndian, &packetLen)
     if err != nil { return }
     // read header
-    err = binary.Read(self.conn, binary.LittleEndian, &serial)
+    err = binary.Read(connReader, binary.LittleEndian, &serial)
     if err != nil { return }
     self.BytesReceived += 4
     packetLen -= 4
-    err = binary.Read(self.conn, binary.LittleEndian, &id)
+    err = binary.Read(connReader, binary.LittleEndian, &id)
     if err != nil { return }
     self.BytesReceived += 8
     packetLen -= 8
-    err = binary.Read(self.conn, binary.LittleEndian, &t)
+    err = binary.Read(connReader, binary.LittleEndian, &t)
     if err != nil { return }
     self.BytesReceived += 1
     packetLen -= 1
@@ -238,7 +240,7 @@ func (self *Comm) startReader() {
     session.maxReceivedSerial = serial
     // read data
     data := make([]byte, packetLen)
-    n, _ = io.ReadFull(self.conn, data)
+    n, _ = io.ReadFull(connReader, data)
     if uint16(n) != packetLen { return }
     self.BytesReceived += uint64(packetLen)
     packetLen = 0
