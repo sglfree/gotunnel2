@@ -199,13 +199,7 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
       sig := ev.Data[0]
       if sig == sigClose {
         serv := ev.Session.Obj.(*Serv)
-        if serv.targetConn != nil {
-          time.AfterFunc(time.Second * 3, func() {
-            serv.closeTargetConnOnce.Do(func() {
-              serv.targetConn.(*net.TCPConn).Close()
-            })
-          })
-        }
+        time.AfterFunc(time.Second * 3, func() { serv.CloseConn() })
         serv.remoteClosed = true
         if serv.localClosed {
           serv.Close()
@@ -258,11 +252,7 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
   for _, session := range comm.Sessions {
     serv, ok := session.Obj.(*Serv)
     if ok {
-      serv.closeTargetConnOnce.Do(func() {
-        if serv.targetConn != nil {
-          serv.targetConn.(*net.TCPConn).Close()
-        }
-      })
+      serv.CloseConn()
       serv.Close()
     } else {
       session.Close()
@@ -276,4 +266,12 @@ func (self *Serv) Close() {
     self.session.Close()
     self.session = nil
   })
+}
+
+func (self *Serv) CloseConn() {
+  if self.targetConn != nil {
+    self.closeTargetConnOnce.Do(func() {
+      self.targetConn.(*net.TCPConn).Close()
+    })
+  }
 }
