@@ -227,7 +227,6 @@ func (self *Comm) startReader() {
       session.maxAckSerial = serial
       // clear packet buffer
       for p, h := session.packets.tail, session.packets.head; p != h && p.serial <= serial; {
-        info("%v %v\n", p.sentTime.Sub(p.createTime), time.Now().Sub(p.sentTime))
         session.packets.De()
         p = session.packets.tail
       }
@@ -326,6 +325,5 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
     self.readySig <- struct{}{}
   }
   self.Sessions[id] = session
-  info("%d new session\n", session.Id)
   return session
 }

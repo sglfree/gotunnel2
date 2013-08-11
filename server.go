@@ -7,7 +7,6 @@ import (
   cr "./conn_reader"
   "./session"
   "time"
-  //"io/ioutil"
   "io"
   "os"
   "runtime/pprof"

@@ -68,5 +68,4 @@ func (self *Session) Signal(sig uint8) {
 func (self *Session) Close() {
   close(self.sendQueue)
   delete(self.comm.Sessions, self.Id)
-  info("%d close session\n", self.Id)
 }
