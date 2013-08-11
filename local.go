@@ -110,7 +110,7 @@ func main() {
   var memStats runtime.MemStats
   printer := NewPrinter(40)
 
-  for { select {
+  loop: for { select {
   // ping
   case <-keepaliveTicker.C:
     keepaliveSession.Signal(sigPing)
@@ -158,6 +158,9 @@ func main() {
     case cr.DATA: // client data
       serv.session.Send(ev.Data)
     case cr.EOF, cr.ERROR: // client close
+      if serv.session == nil { // serv already closed
+        continue loop
+      }
       serv.session.Signal(sigClose)
       serv.localClosed = true
       if serv.remoteClosed {
@@ -198,5 +201,6 @@ func main() {
 func (self *Serv) Close() {
   self.closeOnce.Do(func() {
     self.session.Close()
+    self.session = nil
   })
 }

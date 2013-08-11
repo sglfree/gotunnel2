@@ -241,6 +241,9 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
     case cr.DATA:
       serv.session.Send(ev.Data)
     case cr.EOF, cr.ERROR:
+      if serv.session == nil { // serv already closed
+        continue loop
+      }
       serv.session.Signal(sigClose)
       serv.localClosed = true
       if serv.remoteClosed {
@@ -271,5 +274,6 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
 func (self *Serv) Close() {
   self.closeOnce.Do(func() {
     self.session.Close()
+    self.session = nil
   })
 }
