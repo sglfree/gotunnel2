@@ -8,7 +8,7 @@ import (
   "sync/atomic"
 )
 
-const BUFFER_SIZE = 11200
+const BUFFER_SIZE = 2048
 
 func init() {
   rand.Seed(time.Now().UnixNano())
