@@ -126,15 +126,21 @@ func main() {
     }
     runtime.ReadMemStats(&memStats)
     printer.Print("%s in use", formatFlow(memStats.Alloc))
-    printer.Print("%s obtained", formatFlow(memStats.Sys))
-    printer.Print("--- sessions ---")
+    printer.Print("%d connections", clientReader.Count)
+    printer.Print("--- %d sessions ---", len(comm.Sessions))
     for _, sessionId := range ByValue(comm.Sessions, func(a, b reflect.Value) bool {
       return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
     }).Interface().([]int64) {
       session := comm.Sessions[sessionId]
       serv, ok := session.Obj.(*Serv)
       if !ok { continue }
-      printer.Print(serv.hostPort)
+      if serv.localClosed {
+        printer.Print("Lx %s", serv.hostPort)
+      } else if serv.remoteClosed {
+        printer.Print("Rx %s", serv.hostPort)
+      } else {
+        printer.Print(serv.hostPort)
+      }
     }
     box.Flush()
   // new socks client
