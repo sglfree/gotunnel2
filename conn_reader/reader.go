@@ -5,6 +5,7 @@ import (
   "math/rand"
   "time"
   "io"
+  "sync/atomic"
 )
 
 const BUFFER_SIZE = 11200
@@ -15,6 +16,7 @@ func init() {
 
 type ConnReader struct {
   Events chan Event
+  Count int32
 }
 
 const (
@@ -36,7 +38,9 @@ func New() *ConnReader {
 }
 
 func (self *ConnReader) Add(tcpConn *net.TCPConn, obj interface{}) {
+  atomic.AddInt32(&self.Count, int32(1))
   go func() {
+    defer atomic.AddInt32(&self.Count, int32(-1))
     for {
       buf := make([]byte, BUFFER_SIZE)
       n, err := tcpConn.Read(buf)

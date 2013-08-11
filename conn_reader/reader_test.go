@@ -51,4 +51,7 @@ func TestConnReader(t *testing.T) {
       break
     }
   }
+  if reader.Count != 0 {
+    t.Fail()
+  }
 }
