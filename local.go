@@ -109,6 +109,7 @@ func main() {
 
   var memStats runtime.MemStats
   printer := NewPrinter(40)
+  reconnectTimes := 0
 
   loop: for { select {
   // ping
@@ -116,14 +117,17 @@ func main() {
     keepaliveSession.Signal(sigPing)
   // heartbeat
   case <-heartbeat.C:
+    if time.Now().Sub(comm.LastReadTime) > BAD_CONN_THRESHOLD {
+      comm = session.NewComm(getServerConn(), cipherKey, comm)
+      reconnectTimes += 1
+    }
+
     box.Clear(box.ColorDefault, box.ColorDefault)
     printer.Reset()
     printer.Print("listening %v", globalConfig["local"])
     printer.Print("connected %v", addr)
+    printer.Print("reconnected %d times", reconnectTimes)
     printer.Print("%s %s >< %s", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
-    if time.Now().Sub(comm.LastReadTime) > BAD_CONN_THRESHOLD {
-      comm = session.NewComm(getServerConn(), cipherKey, comm)
-    }
     runtime.ReadMemStats(&memStats)
     printer.Print("%s in use", formatFlow(memStats.Alloc))
     printer.Print("%d connections", clientReader.Count)
@@ -143,6 +147,7 @@ func main() {
       }
     }
     box.Flush()
+
   // new socks client
   case socksClient := <-socksServer.Clients:
     serv := &Serv{
