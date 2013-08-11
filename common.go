@@ -34,17 +34,17 @@ const (
 var (
   PING_INTERVAL = time.Second * 5
   BAD_CONN_THRESHOLD = time.Second * 15
+  CONFIG_FILEPATH string
 )
 
 func loadConfig(defaultConf map[string]string) map[string]string {
   currentUser, err := user.Current()
   if err != nil { log.Fatal("cannot get current user") }
-  configFilePath := filepath.Join(currentUser.HomeDir, CONFIG_FILENAME)
-  fmt.Printf("loading configuration from %s\n", configFilePath)
-  s, err := ioutil.ReadFile(configFilePath)
+  CONFIG_FILEPATH = filepath.Join(currentUser.HomeDir, CONFIG_FILENAME)
+  s, err := ioutil.ReadFile(CONFIG_FILEPATH)
   if err != nil {
     //if !strings.Contains(err.Error(), "no such file") { log.Fatal(err) }
-    err = ioutil.WriteFile(configFilePath, marshalConfig(defaultConf), os.ModePerm)
+    err = ioutil.WriteFile(CONFIG_FILEPATH, marshalConfig(defaultConf), os.ModePerm)
     return defaultConf
   }
   config := make(map[string]string)
@@ -56,8 +56,8 @@ func loadConfig(defaultConf map[string]string) map[string]string {
 func saveConfig(conf map[string]string) {
   currentUser, err := user.Current()
   if err != nil { log.Fatal("cannot get current user") }
-  configFilePath := filepath.Join(currentUser.HomeDir, CONFIG_FILENAME)
-  err = ioutil.WriteFile(configFilePath, marshalConfig(conf), os.ModePerm)
+  CONFIG_FILEPATH = filepath.Join(currentUser.HomeDir, CONFIG_FILENAME)
+  err = ioutil.WriteFile(CONFIG_FILEPATH, marshalConfig(conf), os.ModePerm)
   if err != nil { log.Fatal("cannot write config file") }
 }
 

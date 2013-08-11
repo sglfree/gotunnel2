@@ -151,7 +151,8 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
     box.Clear(box.ColorDefault, box.ColorDefault)
     printer.Reset()
     runtime.ReadMemStats(&memStats)
-    printer.Print("%s in use", formatFlow(memStats.Alloc))
+    printer.Print("conf %s", CONFIG_FILEPATH)
+    printer.Print("%s memory in use", formatFlow(memStats.Alloc))
     printer.Print("%d connections", targetReader.Count)
     printer.Print("--- %d sessions ---", len(comm.Sessions))
     for _, sessionId := range ByValue(comm.Sessions, func(a, b reflect.Value) bool {

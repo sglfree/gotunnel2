@@ -124,12 +124,13 @@ func main() {
 
     box.Clear(box.ColorDefault, box.ColorDefault)
     printer.Reset()
+    printer.Print("conf %s", CONFIG_FILEPATH)
     printer.Print("listening %v", globalConfig["local"])
     printer.Print("connected %v", addr)
     printer.Print("reconnected %d times", reconnectTimes)
-    printer.Print("%s %s >< %s", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
+    printer.Print("%s %s >-< %s", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
     runtime.ReadMemStats(&memStats)
-    printer.Print("%s in use", formatFlow(memStats.Alloc))
+    printer.Print("%s memory in use", formatFlow(memStats.Alloc))
     printer.Print("%d connections", clientReader.Count)
     printer.Print("--- %d sessions ---", len(comm.Sessions))
     for _, sessionId := range ByValue(comm.Sessions, func(a, b reflect.Value) bool {
