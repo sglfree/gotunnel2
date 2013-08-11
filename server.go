@@ -119,6 +119,7 @@ type Serv struct {
   remoteClosed bool
   closeTargetConnOnce sync.Once
   hostPort string
+  closeOnce sync.Once
 }
 
 func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
@@ -206,7 +207,11 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
           })
         }
         serv.remoteClosed = true
-        if serv.localClosed { closeServ(serv) }
+        if serv.localClosed {
+          serv.Close()
+        } else {
+          time.AfterFunc(time.Minute * 3, func() { serv.Close() })
+        }
       } else if sig == sigPing { // from keepaliveSession
         ev.Session.Signal(sigPing)
       }
@@ -218,7 +223,11 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
     if serv.targetConn == nil { // fail to connect to target
       serv.session.Signal(sigClose)
       serv.localClosed = true
-      if serv.remoteClosed { closeServ(serv) }
+      if serv.remoteClosed {
+        serv.Close()
+      } else {
+        time.AfterFunc(time.Minute * 3, func() { serv.Close() })
+      }
       continue loop
     }
     for _, data := range serv.sendQueue {
@@ -234,7 +243,11 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
     case cr.EOF, cr.ERROR:
       serv.session.Signal(sigClose)
       serv.localClosed = true
-      if serv.remoteClosed { closeServ(serv) }
+      if serv.remoteClosed {
+        serv.Close()
+      } else {
+        time.AfterFunc(time.Minute * 3, func() { serv.Close() })
+      }
     }
   }}
 
@@ -247,7 +260,7 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
           serv.targetConn.(*net.TCPConn).Close()
         }
       })
-      closeServ(serv)
+      serv.Close()
     } else {
       session.Close()
     }
@@ -255,6 +268,8 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
   comm.Close()
 }
 
-func closeServ(serv *Serv) {
-  serv.session.Close()
+func (self *Serv) Close() {
+  self.closeOnce.Do(func() {
+    self.session.Close()
+  })
 }

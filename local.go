@@ -160,7 +160,11 @@ func main() {
     case cr.EOF, cr.ERROR: // client close
       serv.session.Signal(sigClose)
       serv.localClosed = true
-      if serv.remoteClosed { serv.Close() }
+      if serv.remoteClosed {
+        serv.Close()
+      } else {
+        time.AfterFunc(time.Minute * 3, func() { serv.Close() })
+      }
     }
   // server events
   case ev := <-comm.Events:
@@ -178,7 +182,11 @@ func main() {
           serv.clientConn.Close()
         })
         serv.remoteClosed = true
-        if serv.localClosed { serv.Close() }
+        if serv.localClosed {
+          serv.Close()
+        } else {
+          time.AfterFunc(time.Minute * 3, func() { serv.Close() })
+        }
       } else if sig == sigPing {
       }
     case session.ERROR:
