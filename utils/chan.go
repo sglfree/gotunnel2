@@ -27,7 +27,7 @@ func NewChan(in, out interface{}) {
           Dir: reflect.SelectRecv,
           Chan: inValue,
         }})
-        if chosen == 0 {
+        if chosen == 0 { // out
           tail = tail.next
         } else {
           if !ok { return }

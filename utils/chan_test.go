@@ -34,3 +34,14 @@ func TestChan(t *testing.T) {
   }
   fmt.Printf("check whether memory or goroutine is leaking.\n")
 }
+
+func BenchmarkChan(b *testing.B) {
+  in := make(chan int)
+  out := make(chan int)
+  NewChan(in, out)
+  b.ResetTimer()
+  for i := 0; i < b.N; i++ {
+    in <- 5
+    <-out
+  }
+}
