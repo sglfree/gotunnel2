@@ -8,14 +8,16 @@ import (
 
 func TestChan(t *testing.T) {
   for ci := 0; ci < 10; ci++ {
-    c := NewChan()
+    in := make(chan string)
+    out := make(chan string)
+    NewChan(in, out)
     n := 1000
     var memStats runtime.MemStats
     for i := 0; i < n; i++ {
-      c.In <- fmt.Sprintf("%d", i)
+      in <- fmt.Sprintf("%d", i)
     }
     for i := 0; i < n; i++ {
-      s := (<-c.Out).(string)
+      s := <-out
       if s != fmt.Sprintf("%d", i) {
         t.Fail()
       }
@@ -25,14 +27,10 @@ func TestChan(t *testing.T) {
         fmt.Printf("%v %d\n", memStats.Alloc, runtime.NumGoroutine())
       }
     }
+    close(in)
     runtime.GC()
+    _, ok := <-out
+    if ok { t.Fail() }
   }
   fmt.Printf("check whether memory or goroutine is leaking.\n")
-
-  c := NewChan()
-  select {
-  case <-c.Out:
-    t.Fail()
-  default:
-  }
 }

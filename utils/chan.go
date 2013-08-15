@@ -1,33 +1,36 @@
 package utils
 
 import (
-  "runtime"
+  "log"
+  "reflect"
 )
 
-type Chan struct {
-  In chan interface{}
-  Out chan interface{}
-}
-
-func NewChan() *Chan {
-  c := &Chan{
-    In: make(chan interface{}),
-    Out: make(chan interface{}),
+func NewChan(in, out interface{}) {
+  inValue := reflect.ValueOf(in)
+  outValue := reflect.ValueOf(out)
+  if inValue.Kind() != reflect.Chan || outValue.Kind() != reflect.Chan {
+    log.Fatal("NewChan: argument is not a chan")
   }
-  ended := make(chan struct{})
-  end := make(chan struct{})
-  go func(in, out chan interface{}) {
+  go func() {
+    defer outValue.Close()
     headNode := new(element)
     headNode.next = headNode
     head := headNode
     tail := headNode
-    defer close(ended)
     for {
       if tail != head {
-        select {
-        case out <- tail.value:
-          tail = tail.next // dequeue
-        case v := <-in:
+        chosen, v, ok := reflect.Select([]reflect.SelectCase{reflect.SelectCase{
+          Dir: reflect.SelectSend,
+          Chan: outValue,
+          Send: tail.value,
+        }, reflect.SelectCase{
+          Dir: reflect.SelectRecv,
+          Chan: inValue,
+        }})
+        if chosen == 0 {
+          tail = tail.next
+        } else {
+          if !ok { return }
           e := &element{value: v}
           if head == tail {
             tail = e
@@ -35,35 +38,26 @@ func NewChan() *Chan {
           e.next = head
           head.next.next = e
           head.next = e
-        case <-end:
-          return
         }
       } else {
-        select {
-        case v := <-in:
-          e := &element{value: v}
-          if head == tail {
-            tail = e
-          }
-          e.next = head
-          head.next.next = e
-          head.next = e
-        case <-end:
-          return
+        _, v, ok := reflect.Select([]reflect.SelectCase{reflect.SelectCase{
+          Dir: reflect.SelectRecv,
+          Chan: inValue,
+        }})
+        if !ok { return }
+        e := &element{value: v}
+        if head == tail {
+          tail = e
         }
+        e.next = head
+        head.next.next = e
+        head.next = e
       }
     }
-  }(c.In, c.Out)
-  runtime.SetFinalizer(c, func(x *Chan) {
-    end <- struct{}{}
-    <-ended
-    close(x.In)
-    close(x.Out)
-  })
-  return c
+  }()
 }
 
 type element struct {
-  value interface{}
+  value reflect.Value
   next *element
 }
