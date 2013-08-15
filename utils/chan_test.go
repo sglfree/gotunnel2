@@ -33,6 +33,15 @@ func TestChan(t *testing.T) {
     if ok { t.Fail() }
   }
   fmt.Printf("check whether memory or goroutine is leaking.\n")
+
+  in := make(chan int)
+  out := make(chan int)
+  NewChan(in, out)
+  select {
+  case <-out:
+    t.Fail()
+  default:
+  }
 }
 
 func BenchmarkChan(b *testing.B) {
