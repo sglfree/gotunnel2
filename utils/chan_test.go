@@ -28,4 +28,11 @@ func TestChan(t *testing.T) {
     runtime.GC()
   }
   fmt.Printf("check whether memory or goroutine is leaking.\n")
+
+  c := NewChan()
+  select {
+  case <-c.Out:
+    t.Fail()
+  default:
+  }
 }
