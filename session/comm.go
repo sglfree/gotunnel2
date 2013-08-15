@@ -42,6 +42,7 @@ type Comm struct {
   readyToSend1 chan *Session
   readyToSend2 chan *Session
   readySig chan struct{}
+  readySigIn chan struct{}
   ackQueue chan []byte // ack packet queue
   eventsIn chan Event
   Events chan Event // events channel
@@ -79,7 +80,9 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   c.readyToSend0 = make(chan *Session, BUFFERED_CHAN_SIZE)
   c.readyToSend1 = make(chan *Session, BUFFERED_CHAN_SIZE)
   c.readyToSend2 = make(chan *Session, BUFFERED_CHAN_SIZE)
-  c.readySig = make(chan struct{}, BUFFERED_CHAN_SIZE)
+  c.readySig = make(chan struct{})
+  c.readySigIn = make(chan struct{})
+  utils.NewChan(c.readySigIn, c.readySig)
   if ref != nil && ref.ackQueue != nil {
     c.ackQueue = ref.ackQueue
   } else {
@@ -281,7 +284,7 @@ func (self *Comm) startAck() {
       binary.Write(buf, binary.LittleEndian, sessionId)
       binary.Write(buf, binary.LittleEndian, typeAck)
       self.ackQueue <- buf.Bytes()
-      self.readySig <- struct{}{}
+      self.readySigIn <- struct{}{}
       lastAck[sessionId] = ackSerial
     }
   case <-self.stopAck:
@@ -293,7 +296,7 @@ func (self *Comm) startAck() {
 func (self *Comm) Close() {
   self.conn.Close()
   close(self.stopSender)
-  self.readySig <- struct{}{}
+  self.readySigIn <- struct{}{}
   close(self.stopAck)
   <-self.stoppedReader
   <-self.stoppedSender
@@ -301,7 +304,7 @@ func (self *Comm) Close() {
   close(self.readyToSend0)
   close(self.readyToSend1)
   close(self.readyToSend2)
-  close(self.readySig)
+  close(self.readySigIn)
   self.IsClosed = true
 }
 
@@ -326,7 +329,7 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
   if isNew {
     session.sendPacket(typeConnect, data)
     self.readyToSend0 <- session
-    self.readySig <- struct{}{}
+    self.readySigIn <- struct{}{}
   }
   self.Sessions[id] = session
   return session
