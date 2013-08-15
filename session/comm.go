@@ -11,6 +11,7 @@ import (
   "bytes"
   "log"
   "crypto/aes"
+  "../utils"
 )
 
 func init() {
@@ -42,6 +43,7 @@ type Comm struct {
   readyToSend2 chan *Session
   readySig chan struct{}
   ackQueue chan []byte // ack packet queue
+  eventsIn chan Event
   Events chan Event // events channel
   key []byte // encryption key
   BytesSent uint64
@@ -85,8 +87,11 @@ func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
   }
   if ref != nil && ref.Events != nil {
     c.Events = ref.Events
+    c.eventsIn = ref.eventsIn
   } else {
-    c.Events = make(chan Event, BUFFERED_CHAN_SIZE)
+    c.Events = make(chan Event)
+    c.eventsIn = make(chan Event)
+    utils.NewChan(c.eventsIn, c.Events)
   }
   c.key = key
   _, err := aes.NewCipher(c.key)
@@ -297,12 +302,11 @@ func (self *Comm) Close() {
   close(self.readyToSend1)
   close(self.readyToSend2)
   close(self.readySig)
-  //close(self.ackQueue)
   self.IsClosed = true
 }
 
 func (self *Comm) emit(ev Event) {
-  self.Events <- ev
+  self.eventsIn <- ev
 }
 
 func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) {
