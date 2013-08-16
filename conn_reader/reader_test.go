@@ -26,7 +26,7 @@ func TestConnReader(t *testing.T) {
     }
   }()
   <-ready
-  n := 50
+  n := 512
   for i := 0; i < n; i++ {
     conn, err := net.DialTCP("tcp", nil, addr)
     if err != nil { t.Fatal(err) }
