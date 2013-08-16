@@ -269,7 +269,7 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
     Id: id,
     comm: self,
     Obj: obj,
-    sendQueue: make(chan *Packet, 512),
+    sendQueue: make(chan *Packet, 1),
     packets: NewQueue(),
     StartTime: time.Now(),
   }

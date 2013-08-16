@@ -124,7 +124,7 @@ type Serv struct {
 func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
   targetReader := cr.New()
   comm := session.NewComm(conn, []byte(globalConfig["key"]))
-  targetConnEvents := make(chan *Serv, 512)
+  targetConnEvents := make(chan *Serv, 1)
   connectTarget := func(serv *Serv, hostPort string) {
     defer func() {
       targetConnEvents <- serv
