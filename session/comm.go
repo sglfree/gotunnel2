@@ -34,6 +34,14 @@ type Event struct {
   Data []byte
 }
 
+type Packet struct {
+  serial uint32
+  data []byte
+  next *Packet
+  createTime time.Time
+  sentTime time.Time
+}
+
 type Comm struct {
   IsClosed bool
   conn *net.TCPConn // tcp connection to other side
@@ -57,80 +65,32 @@ type Comm struct {
   LastReadTime time.Time
 }
 
-type Packet struct {
-  serial uint32
-  data []byte
-  next *Packet
-  createTime time.Time
-  sentTime time.Time
-}
-
-func NewComm(conn *net.TCPConn, key []byte, ref *Comm) (*Comm) {
-  if ref != nil && !ref.IsClosed { ref.Close() }
-  c := new(Comm)
-  c.conn = conn
-  if ref != nil && ref.Sessions != nil {
-    c.Sessions = ref.Sessions
-    for _, session := range c.Sessions {
-      session.comm = c
-    }
-  } else {
-    c.Sessions = make(map[int64]*Session)
-  }
-  c.readyToSend0 = make(chan *Session, BUFFERED_CHAN_SIZE)
-  c.readyToSend1 = make(chan *Session, BUFFERED_CHAN_SIZE)
-  c.readyToSend2 = make(chan *Session, BUFFERED_CHAN_SIZE)
-  c.readySig = make(chan struct{})
-  c.readySigIn = make(chan struct{})
-  utils.NewChan(c.readySigIn, c.readySig)
-  if ref != nil && ref.ackQueue != nil {
-    c.ackQueue = ref.ackQueue
-  } else {
-    c.ackQueue = make(chan []byte, BUFFERED_CHAN_SIZE)
-  }
-  if ref != nil && ref.Events != nil {
-    c.Events = ref.Events
-    c.eventsIn = ref.eventsIn
-  } else {
-    c.Events = make(chan Event)
-    c.eventsIn = make(chan Event)
-    utils.NewChan(c.eventsIn, c.Events)
-  }
-  c.key = key
-  _, err := aes.NewCipher(c.key)
+func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
+  _, err := aes.NewCipher(key)
   if err != nil { log.Fatal(err) }
-  if ref != nil && ref.BytesSent != 0 {
-    c.BytesSent = ref.BytesSent
+  c := &Comm{
+    conn: conn,
+    Sessions: make(map[int64]*Session),
+    readyToSend0: make(chan *Session, BUFFERED_CHAN_SIZE),
+    readyToSend1: make(chan *Session, BUFFERED_CHAN_SIZE),
+    readyToSend2: make(chan *Session, BUFFERED_CHAN_SIZE),
+    readySig: make(chan struct{}),
+    readySigIn: make(chan struct{}),
+    ackQueue: make(chan []byte, BUFFERED_CHAN_SIZE),
+    Events: make(chan Event),
+    eventsIn: make(chan Event),
+    key: key,
+    stopSender: make(chan struct{}),
+    stopAck: make(chan struct{}),
+    stoppedReader: make(chan struct{}),
+    stoppedSender: make(chan struct{}),
+    stoppedAck: make(chan struct{}),
+    LastReadTime: time.Now(),
   }
-  if ref != nil && ref.BytesReceived != 0 {
-    c.BytesReceived = ref.BytesReceived
-  }
-  c.stopSender = make(chan struct{})
-  c.stopAck = make(chan struct{})
-  c.stoppedReader = make(chan struct{})
-  c.stoppedSender = make(chan struct{})
-  c.stoppedAck = make(chan struct{})
-  c.LastReadTime = time.Now()
+  utils.NewChan(c.readySigIn, c.readySig)
+  utils.NewChan(c.eventsIn, c.Events)
 
   go c.startReader()
-
-  ack_loop: for {
-    select {
-    case data := <-c.ackQueue:
-      c.write(data)
-    default:
-      break ack_loop
-    }
-  }
-
-  // resent not acked packet
-  for _, session := range c.Sessions {
-    for t, h := session.packets.tail, session.packets.head; t != h; t = t.next {
-      c.write(t.data)
-      c.BytesSent += uint64(len(t.data))
-    }
-  }
-
   go c.startSender()
   go c.startAck()
 
