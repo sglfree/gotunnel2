@@ -8,12 +8,14 @@ import (
   "encoding/binary"
   "bytes"
   "strconv"
+  "../utils"
 )
 
 type Server struct {
   ln *net.TCPListener
   isStopped bool
   Clients chan *Client
+  ClientsIn chan *Client
 }
 
 func (self *Server) Close() {
@@ -23,8 +25,10 @@ func (self *Server) Close() {
 
 func New(listenAddr string) (*Server, error) {
   server := &Server{
-    Clients: make(chan *Client, 512),
+    Clients: make(chan *Client),
+    ClientsIn: make(chan *Client),
   }
+  utils.NewChan(server.ClientsIn, server.Clients)
   addr, err := net.ResolveTCPAddr("tcp", listenAddr)
   if err != nil { return nil, server.newError(err) }
   ln, err := net.ListenTCP("tcp", addr)
@@ -135,7 +139,7 @@ func (self *Server) handshake(conn *net.TCPConn) error {
     Conn: conn,
     HostPort: hostPort,
   }
-  self.Clients <- client
+  self.ClientsIn <- client
 
   return nil
 }
