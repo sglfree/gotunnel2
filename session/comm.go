@@ -97,6 +97,34 @@ func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
   return c
 }
 
+func (self *Comm) UseConn(conn *net.TCPConn) {
+  // stop 
+  self.conn.Close()
+  <-self.stoppedReader
+  close(self.stopSender)
+  self.readySigIn <- struct{}{}
+  <-self.stoppedSender
+  close(self.stopAck)
+  <-self.stoppedAck
+  // resent
+  self.conn = conn
+  for _, session := range self.Sessions {
+    for t, h := session.packets.tail, session.packets.head; t != h; t = t.next {
+      self.write(t.data)
+      self.BytesSent += uint64(len(t.data))
+    }
+  }
+  // restart
+  self.stopSender = make(chan struct{})
+  self.stopAck = make(chan struct{})
+  self.stoppedReader = make(chan struct{})
+  self.stoppedSender = make(chan struct{})
+  self.stoppedAck = make(chan struct{})
+  go self.startReader()
+  go self.startSender()
+  go self.startAck()
+}
+
 func (self *Comm) write(data []byte) {
   l := len(data)
   if l > MAX_DATA_LENGTH {
