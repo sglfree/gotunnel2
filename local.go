@@ -94,7 +94,7 @@ func main() {
     binary.Write(serverConn, binary.LittleEndian, commId)
     return serverConn
   }
-  comm := session.NewComm(getServerConn(), cipherKey, nil)
+  comm := session.NewComm(getServerConn(), cipherKey)
 
   // keepalive
   keepaliveSession := comm.NewSession(-1, []byte(keepaliveSessionMagic), nil)
@@ -118,7 +118,7 @@ func main() {
   // heartbeat
   case <-heartbeat.C:
     if time.Now().Sub(comm.LastReadTime) > BAD_CONN_THRESHOLD {
-      comm = session.NewComm(getServerConn(), cipherKey, comm)
+      comm.UseConn(getServerConn())
       reconnectTimes += 1
     }
 

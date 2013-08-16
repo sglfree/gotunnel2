@@ -123,7 +123,7 @@ type Serv struct {
 
 func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
   targetReader := cr.New()
-  comm := session.NewComm(conn, []byte(globalConfig["key"]), nil)
+  comm := session.NewComm(conn, []byte(globalConfig["key"]))
   targetConnEvents := make(chan *Serv, 512)
   connectTarget := func(serv *Serv, hostPort string) {
     defer func() {
@@ -172,7 +172,7 @@ func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
     box.Flush()
   // conn change
   case conn := <-connChange:
-    comm = session.NewComm(conn, []byte(globalConfig["key"]), comm)
+    comm.UseConn(conn)
   // local-side events
   case ev := <-comm.Events:
     switch ev.Type {
