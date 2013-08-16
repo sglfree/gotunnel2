@@ -28,9 +28,11 @@ func TestChan(t *testing.T) {
       }
     }
     close(in)
+    select {
+    case <-out: t.Fail()
+    default:
+    }
     runtime.GC()
-    _, ok := <-out
-    if ok { t.Fail() }
   }
   fmt.Printf("check whether memory or goroutine is leaking.\n")
 
