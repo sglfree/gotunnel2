@@ -98,7 +98,7 @@ func TestSession(t *testing.T) {
   conn1, conn2 = getConns()
   comm1 = NewComm(conn1, key)
   comm2 = NewComm(conn2, key)
-  n = 10240
+  n = 20480
   go func() {
     x := 0
     for {

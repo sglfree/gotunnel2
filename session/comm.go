@@ -37,8 +37,6 @@ type Packet struct {
   serial uint32
   data []byte
   next *Packet
-  createTime time.Time
-  sentTime time.Time
 }
 
 type Comm struct {
@@ -129,21 +127,16 @@ func (self *Comm) write(data []byte) {
   self.conn.Write(data)
 }
 
-func (self *Comm) sentSessionPacket(session *Session) {
-  packet := <-session.sendQueue
-  packet.sentTime = time.Now()
-  self.write(packet.data)
-  self.BytesSent += uint64(len(packet.data))
-  session.packets.En(packet)
-}
-
 func (self *Comm) startSender() {
   for { select {
   case data := <-self.ackQueue:
     self.write(data)
     self.BytesSent += uint64(len(data))
   case session := <-self.readyToSend:
-    self.sentSessionPacket(session)
+    packet := <-session.sendQueue
+    self.write(packet.data)
+    self.BytesSent += uint64(len(packet.data))
+    session.packets.En(packet)
   case <-self.stopSender:
     close(self.stoppedSender)
     return
@@ -230,6 +223,10 @@ func (self *Comm) startReader() {
   }
 }
 
+func (self *Comm) emit(ev Event) {
+  self.eventsIn <- ev
+}
+
 func (self *Comm) startAck() {
   lastAck := make(map[int64]uint32)
   ticker := time.NewTicker(time.Millisecond * 500)
@@ -260,10 +257,6 @@ func (self *Comm) Close() {
   <-self.stoppedAck
   close(self.readyToSendIn)
   self.IsClosed = true
-}
-
-func (self *Comm) emit(ev Event) {
-  self.eventsIn <- ev
 }
 
 func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) {
