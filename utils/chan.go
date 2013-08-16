@@ -3,6 +3,7 @@ package utils
 import (
   "log"
   "reflect"
+  "container/list"
 )
 
 func NewChan(in, out interface{}) {
@@ -13,31 +14,22 @@ func NewChan(in, out interface{}) {
   }
   go func() {
     defer outValue.Close()
-    headNode := new(element)
-    headNode.next = headNode
-    head := headNode
-    tail := headNode
+    buffer := list.New()
     for {
-      if tail != head {
+      if buffer.Len() > 0 {
         chosen, v, ok := reflect.Select([]reflect.SelectCase{reflect.SelectCase{
           Dir: reflect.SelectSend,
           Chan: outValue,
-          Send: tail.value,
+          Send: buffer.Front().Value.(reflect.Value),
         }, reflect.SelectCase{
           Dir: reflect.SelectRecv,
           Chan: inValue,
         }})
         if chosen == 0 { // out
-          tail = tail.next
+          buffer.Remove(buffer.Front())
         } else {
           if !ok { return }
-          e := &element{value: v}
-          if head == tail {
-            tail = e
-          }
-          e.next = head
-          head.next.next = e
-          head.next = e
+          buffer.PushBack(v)
         }
       } else {
         _, v, ok := reflect.Select([]reflect.SelectCase{reflect.SelectCase{
@@ -45,19 +37,8 @@ func NewChan(in, out interface{}) {
           Chan: inValue,
         }})
         if !ok { return }
-        e := &element{value: v}
-        if head == tail {
-          tail = e
-        }
-        e.next = head
-        head.next.next = e
-        head.next = e
+        buffer.PushBack(v)
       }
     }
   }()
-}
-
-type element struct {
-  value reflect.Value
-  next *element
 }
