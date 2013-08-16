@@ -12,6 +12,7 @@ func NewChan(in, out interface{}) {
     log.Fatal("NewChan: argument is not a chan")
   }
   go func() {
+    defer outValue.Close()
     headNode := new(element)
     headNode.next = headNode
     head := headNode
