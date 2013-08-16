@@ -49,20 +49,12 @@ func (self *Session) sendPacket(t uint8, data []byte) {
 
 func (self *Session) Send(data []byte) {
   self.sendPacket(typeData, data)
-  if self.dataSent > OLD_SESSION_DATA_SENT {
-    self.comm.readyToSend2 <- self
-  } else if self.dataSent > 1024 * 16 {
-    self.comm.readyToSend1 <- self
-  } else {
-    self.comm.readyToSend0 <- self
-  }
-  self.comm.readySigIn <- struct{}{}
+  self.comm.readyToSendIn <- self
 }
 
 func (self *Session) Signal(sig uint8) {
   self.sendPacket(typeSignal, []byte{sig})
-  self.comm.readyToSend0 <- self
-  self.comm.readySigIn <- struct{}{}
+  self.comm.readyToSendIn <- self
 }
 
 func (self *Session) Close() {

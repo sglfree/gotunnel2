@@ -24,7 +24,6 @@ const (
   SIGNAL
   ERROR
 
-  BUFFERED_CHAN_SIZE = 4096
   MAX_DATA_LENGTH = 1 << 16 - 1
 )
 
@@ -46,12 +45,10 @@ type Comm struct {
   IsClosed bool
   conn *net.TCPConn // tcp connection to other side
   Sessions map[int64]*Session // map session id to *Session
-  readyToSend0 chan *Session
-  readyToSend1 chan *Session
-  readyToSend2 chan *Session
-  readySig chan struct{}
-  readySigIn chan struct{}
+  readyToSend chan *Session
+  readyToSendIn chan *Session
   ackQueue chan []byte // ack packet queue
+  ackQueueIn chan []byte // ack packet queue
   eventsIn chan Event
   Events chan Event // events channel
   key []byte // encryption key
@@ -71,12 +68,10 @@ func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
   c := &Comm{
     conn: conn,
     Sessions: make(map[int64]*Session),
-    readyToSend0: make(chan *Session, BUFFERED_CHAN_SIZE),
-    readyToSend1: make(chan *Session, BUFFERED_CHAN_SIZE),
-    readyToSend2: make(chan *Session, BUFFERED_CHAN_SIZE),
-    readySig: make(chan struct{}),
-    readySigIn: make(chan struct{}),
-    ackQueue: make(chan []byte, BUFFERED_CHAN_SIZE),
+    readyToSend: make(chan *Session),
+    readyToSendIn: make(chan *Session),
+    ackQueue: make(chan []byte),
+    ackQueueIn: make(chan []byte),
     Events: make(chan Event),
     eventsIn: make(chan Event),
     key: key,
@@ -87,8 +82,9 @@ func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
     stoppedAck: make(chan struct{}),
     LastReadTime: time.Now(),
   }
-  utils.NewChan(c.readySigIn, c.readySig)
   utils.NewChan(c.eventsIn, c.Events)
+  utils.NewChan(c.readyToSendIn, c.readyToSend)
+  utils.NewChan(c.ackQueueIn, c.ackQueue)
 
   go c.startReader()
   go c.startSender()
@@ -102,7 +98,6 @@ func (self *Comm) UseConn(conn *net.TCPConn) {
   self.conn.Close()
   <-self.stoppedReader
   close(self.stopSender)
-  self.readySigIn <- struct{}{}
   <-self.stoppedSender
   close(self.stopAck)
   <-self.stoppedAck
@@ -143,40 +138,16 @@ func (self *Comm) sentSessionPacket(session *Session) {
 }
 
 func (self *Comm) startSender() {
-  next: for {
-    <-self.readySig
-    select {
-    case data := <-self.ackQueue:
-      self.write(data)
-      self.BytesSent += uint64(len(data))
-      continue next
-    default:
-      select {
-      case session := <-self.readyToSend0:
-        self.sentSessionPacket(session)
-        continue next
-      default:
-        select {
-        case session := <-self.readyToSend1:
-          self.sentSessionPacket(session)
-          continue next
-        default:
-          select {
-          case session := <-self.readyToSend2:
-            self.sentSessionPacket(session)
-            continue next
-          default:
-            select {
-            case <-self.stopSender:
-              close(self.stoppedSender)
-              return
-            default:
-            }
-          }
-        }
-      }
-    }
-  }
+  for { select {
+  case data := <-self.ackQueue:
+    self.write(data)
+    self.BytesSent += uint64(len(data))
+  case session := <-self.readyToSend:
+    self.sentSessionPacket(session)
+  case <-self.stopSender:
+    close(self.stoppedSender)
+    return
+  }}
 }
 
 func (self *Comm) startReader() {
@@ -271,8 +242,7 @@ func (self *Comm) startAck() {
       binary.Write(buf, binary.LittleEndian, ackSerial)
       binary.Write(buf, binary.LittleEndian, sessionId)
       binary.Write(buf, binary.LittleEndian, typeAck)
-      self.ackQueue <- buf.Bytes()
-      self.readySigIn <- struct{}{}
+      self.ackQueueIn <- buf.Bytes()
       lastAck[sessionId] = ackSerial
     }
   case <-self.stopAck:
@@ -284,15 +254,11 @@ func (self *Comm) startAck() {
 func (self *Comm) Close() {
   self.conn.Close()
   close(self.stopSender)
-  self.readySigIn <- struct{}{}
   close(self.stopAck)
   <-self.stoppedReader
   <-self.stoppedSender
   <-self.stoppedAck
-  close(self.readyToSend0)
-  close(self.readyToSend1)
-  close(self.readyToSend2)
-  close(self.readySigIn)
+  close(self.readyToSendIn)
   self.IsClosed = true
 }
 
@@ -316,8 +282,7 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
   }
   if isNew {
     session.sendPacket(typeConnect, data)
-    self.readyToSend0 <- session
-    self.readySigIn <- struct{}{}
+    self.readyToSendIn <- session
   }
   self.Sessions[id] = session
   return session
