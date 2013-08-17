@@ -9,7 +9,6 @@ import (
   "time"
   "io"
   "os"
-  "runtime/pprof"
   _ "net/http/pprof"
   "net/http"
   "encoding/binary"
@@ -66,16 +65,6 @@ func main() {
       }
     }
   }}()
-
-  go func() { // profile
-    profileTicker := time.NewTicker(time.Second * 30)
-    for _ = range profileTicker.C {
-      outfile, err := os.Create("server_mem_prof")
-      if err != nil { log.Fatal(err) }
-      pprof.WriteHeapProfile(outfile)
-      outfile.Close()
-    }
-  }()
 
   addr, err := net.ResolveTCPAddr("tcp", globalConfig["listen"])
   if err != nil { log.Fatal("cannot resolve listen address ", err) }
