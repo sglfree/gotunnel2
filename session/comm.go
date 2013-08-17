@@ -43,10 +43,10 @@ type Comm struct {
   IsClosed bool
   conn *net.TCPConn // tcp connection to other side
   Sessions map[int64]*Session // map session id to *Session
-  ackQueue chan []byte // ack packet queue
+  ackQueue <-chan []byte // ack packet queue
   ackQueueIn chan []byte // ack packet queue
   eventsIn chan Event
-  Events chan Event // events channel
+  Events <-chan Event // events channel
   key []byte // encryption key
   BytesSent uint64
   BytesReceived uint64
@@ -56,7 +56,7 @@ type Comm struct {
   stoppedSender chan struct{}
   stoppedAck chan struct{}
   LastReadTime time.Time
-  sendQueue chan *Packet
+  sendQueue <-chan *Packet
   sendQueueIn chan *Packet
 }
 
@@ -66,9 +66,7 @@ func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
   c := &Comm{
     conn: conn,
     Sessions: make(map[int64]*Session),
-    ackQueue: make(chan []byte),
     ackQueueIn: make(chan []byte),
-    Events: make(chan Event),
     eventsIn: make(chan Event),
     key: key,
     stopSender: make(chan struct{}),
@@ -77,12 +75,11 @@ func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
     stoppedSender: make(chan struct{}),
     stoppedAck: make(chan struct{}),
     LastReadTime: time.Now(),
-    sendQueue: make(chan *Packet),
     sendQueueIn: make(chan *Packet),
   }
-  utils.NewChan(c.eventsIn, c.Events)
-  utils.NewChan(c.ackQueueIn, c.ackQueue)
-  utils.NewChan(c.sendQueueIn, c.sendQueue)
+  c.Events = utils.MakeChan(c.eventsIn).(<-chan Event)
+  c.ackQueue = utils.MakeChan(c.ackQueueIn).(<-chan []byte)
+  c.sendQueue = utils.MakeChan(c.sendQueueIn).(<-chan *Packet)
 
   go c.startReader()
   go c.startSender()

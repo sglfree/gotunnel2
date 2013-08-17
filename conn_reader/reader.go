@@ -16,7 +16,7 @@ func init() {
 }
 
 type ConnReader struct {
-  Events chan Event
+  Events <-chan Event
   EventsIn chan Event
   Count int32
 }
@@ -35,9 +35,8 @@ type Event struct {
 
 func New() *ConnReader {
   self := new(ConnReader)
-  self.Events = make(chan Event)
   self.EventsIn = make(chan Event)
-  utils.NewChan(self.EventsIn, self.Events)
+  self.Events = utils.MakeChan(self.EventsIn).(<-chan Event)
   return self
 }
 
