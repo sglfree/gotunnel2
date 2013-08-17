@@ -6,11 +6,12 @@ import (
   "container/list"
 )
 
-func NewChan(in, out interface{}) {
+func MakeChan(in interface{}) (ret interface{}) {
+  outValue := reflect.MakeChan(reflect.TypeOf(in), 0)
+  ret = outValue.Convert(reflect.ChanOf(reflect.RecvDir, reflect.TypeOf(in).Elem())).Interface()
   inValue := reflect.ValueOf(in)
-  outValue := reflect.ValueOf(out)
   if inValue.Kind() != reflect.Chan || outValue.Kind() != reflect.Chan {
-    log.Fatal("NewChan: argument is not a chan")
+    log.Fatal("MakeChan: argument is not a chan")
   }
   go func() {
     defer outValue.Close()
@@ -41,10 +42,5 @@ func NewChan(in, out interface{}) {
       }
     }
   }()
-}
-
-func MakeChan(in interface{}) interface{} {
-  out := reflect.MakeChan(reflect.TypeOf(in), 0)
-  NewChan(in, out.Interface())
-  return out.Convert(reflect.ChanOf(reflect.RecvDir, reflect.TypeOf(in).Elem())).Interface()
+  return
 }

@@ -9,8 +9,7 @@ import (
 func TestChan(t *testing.T) {
   for ci := 0; ci < 10; ci++ {
     in := make(chan string)
-    out := make(chan string)
-    NewChan(in, out)
+    out := MakeChan(in).(<-chan string)
     n := 1000
     var memStats runtime.MemStats
     for i := 0; i < n; i++ {
@@ -35,24 +34,17 @@ func TestChan(t *testing.T) {
   fmt.Printf("check whether memory or goroutine is leaking.\n")
 
   in := make(chan int)
-  out := make(chan int)
-  NewChan(in, out)
+  out := MakeChan(in).(<-chan int)
   select {
   case <-out:
     t.Fail()
   default:
   }
-
-  in = make(chan int)
-  o := MakeChan(in).(<-chan int)
-  in <- 5
-  if <-o != 5 { t.Fail() }
 }
 
 func BenchmarkChan(b *testing.B) {
   in := make(chan int)
-  out := make(chan int)
-  NewChan(in, out)
+  out := MakeChan(in).(<-chan int)
   b.ResetTimer()
   for i := 0; i < b.N; i++ {
     in <- 5
