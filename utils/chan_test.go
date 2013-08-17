@@ -42,6 +42,11 @@ func TestChan(t *testing.T) {
     t.Fail()
   default:
   }
+
+  in = make(chan int)
+  o := MakeChan(in).(<-chan int)
+  in <- 5
+  if <-o != 5 { t.Fail() }
 }
 
 func BenchmarkChan(b *testing.B) {

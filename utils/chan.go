@@ -42,3 +42,9 @@ func NewChan(in, out interface{}) {
     }
   }()
 }
+
+func MakeChan(in interface{}) interface{} {
+  out := reflect.MakeChan(reflect.TypeOf(in), 0)
+  NewChan(in, out.Interface())
+  return out.Convert(reflect.ChanOf(reflect.RecvDir, reflect.TypeOf(in).Elem())).Interface()
+}
