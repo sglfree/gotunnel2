@@ -42,7 +42,7 @@ func (self *Session) sendPacket(t uint8, data []byte) {
   }
   buf.Write(data[i - aes.BlockSize :])
   packet := &Packet{serial: serial, data: buf.Bytes()}
-  self.comm.sendQueue <- packet
+  self.comm.sendQueueIn <- packet
   self.packets.En(packet)
   self.dataSent += uint64(len(data))
 }
