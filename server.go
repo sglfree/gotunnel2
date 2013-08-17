@@ -17,6 +17,7 @@ import (
   "runtime"
   "reflect"
   "fmt"
+  "./utils"
 )
 
 // configuration
@@ -105,8 +106,8 @@ func main() {
       if ok { // change conn
         c <- conn
       } else { // handle new comm
-        connChangeChans[commId] = make(chan *net.TCPConn, 8)
-        handleClient(conn, connChangeChans[commId])
+        connChangeChans[commId] = make(chan *net.TCPConn)
+        handleClient(conn, utils.MakeChan(connChangeChans[commId]).(<-chan *net.TCPConn))
       }
     }()
   }
@@ -123,10 +124,10 @@ type Serv struct {
   closeOnce sync.Once
 }
 
-func handleClient(conn *net.TCPConn, connChange chan *net.TCPConn) {
+func handleClient(conn *net.TCPConn, connChange <-chan *net.TCPConn) {
   targetReader := cr.New()
   comm := session.NewComm(conn, []byte(globalConfig["key"]))
-  targetConnEvents := make(chan *Serv, 1)
+  targetConnEvents := make(chan *Serv)
   connectTarget := func(serv *Serv, hostPort string) {
     defer func() {
       targetConnEvents <- serv
