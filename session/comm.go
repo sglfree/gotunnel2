@@ -250,6 +250,8 @@ func (self *Comm) Close() {
   <-self.stoppedReader
   <-self.stoppedSender
   <-self.stoppedAck
+  close(self.eventsIn)
+  close(self.ackQueueIn)
   close(self.sendQueueIn)
   self.IsClosed = true
 }
