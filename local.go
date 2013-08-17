@@ -84,6 +84,7 @@ func main() {
     log.Fatal(err)
   }
   clientReader := cr.New()
+  defer clientReader.Close()
 
   // connect to remote server
   addr, err := net.ResolveTCPAddr("tcp", globalConfig["remote"])

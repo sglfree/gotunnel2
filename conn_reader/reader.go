@@ -61,3 +61,7 @@ func (self *ConnReader) Add(tcpConn *net.TCPConn, obj interface{}) {
     }
   }()
 }
+
+func (self *ConnReader) Close() {
+  close(self.EventsIn)
+}
