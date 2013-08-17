@@ -43,8 +43,6 @@ type Comm struct {
   IsClosed bool
   conn *net.TCPConn // tcp connection to other side
   Sessions map[int64]*Session // map session id to *Session
-  readyToSend chan *Session
-  readyToSendIn chan *Session
   ackQueue chan []byte // ack packet queue
   ackQueueIn chan []byte // ack packet queue
   eventsIn chan Event
@@ -58,6 +56,8 @@ type Comm struct {
   stoppedSender chan struct{}
   stoppedAck chan struct{}
   LastReadTime time.Time
+  sendQueue chan *Packet
+  sendQueueIn chan *Packet
 }
 
 func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
@@ -66,8 +66,6 @@ func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
   c := &Comm{
     conn: conn,
     Sessions: make(map[int64]*Session),
-    readyToSend: make(chan *Session),
-    readyToSendIn: make(chan *Session),
     ackQueue: make(chan []byte),
     ackQueueIn: make(chan []byte),
     Events: make(chan Event),
@@ -79,10 +77,12 @@ func NewComm(conn *net.TCPConn, key []byte) (*Comm) {
     stoppedSender: make(chan struct{}),
     stoppedAck: make(chan struct{}),
     LastReadTime: time.Now(),
+    sendQueue: make(chan *Packet),
+    sendQueueIn: make(chan *Packet),
   }
   utils.NewChan(c.eventsIn, c.Events)
-  utils.NewChan(c.readyToSendIn, c.readyToSend)
   utils.NewChan(c.ackQueueIn, c.ackQueue)
+  utils.NewChan(c.sendQueueIn, c.sendQueue)
 
   go c.startReader()
   go c.startSender()
@@ -132,11 +132,9 @@ func (self *Comm) startSender() {
   case data := <-self.ackQueue:
     self.write(data)
     self.BytesSent += uint64(len(data))
-  case session := <-self.readyToSend:
-    packet := <-session.sendQueue
+  case packet := <-self.sendQueue:
     self.write(packet.data)
     self.BytesSent += uint64(len(packet.data))
-    session.packets.En(packet)
   case <-self.stopSender:
     close(self.stoppedSender)
     return
@@ -255,7 +253,7 @@ func (self *Comm) Close() {
   <-self.stoppedReader
   <-self.stoppedSender
   <-self.stoppedAck
-  close(self.readyToSendIn)
+  close(self.sendQueueIn)
   self.IsClosed = true
 }
 
@@ -269,13 +267,11 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) (*Session) 
     Id: id,
     comm: self,
     Obj: obj,
-    sendQueue: make(chan *Packet, 1),
     packets: NewQueue(),
     StartTime: time.Now(),
   }
   if isNew {
     session.sendPacket(typeConnect, data)
-    self.readyToSendIn <- session
   }
   self.Sessions[id] = session
   return session

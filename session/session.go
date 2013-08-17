@@ -14,7 +14,6 @@ type Session struct {
   Id int64
   comm *Comm
   Obj interface{}
-  sendQueue chan *Packet
   dataSent uint64
   serial uint32 // next packet serial
   maxReceivedSerial uint32
@@ -43,21 +42,19 @@ func (self *Session) sendPacket(t uint8, data []byte) {
   }
   buf.Write(data[i - aes.BlockSize :])
   packet := &Packet{serial: serial, data: buf.Bytes()}
-  self.sendQueue <- packet
+  self.comm.sendQueue <- packet
+  self.packets.En(packet)
   self.dataSent += uint64(len(data))
 }
 
 func (self *Session) Send(data []byte) {
   self.sendPacket(typeData, data)
-  self.comm.readyToSendIn <- self
 }
 
 func (self *Session) Signal(sig uint8) {
   self.sendPacket(typeSignal, []byte{sig})
-  self.comm.readyToSendIn <- self
 }
 
 func (self *Session) Close() {
-  close(self.sendQueue)
   delete(self.comm.Sessions, self.Id)
 }
