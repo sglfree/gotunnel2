@@ -54,6 +54,18 @@ type Serv struct {
 }
 
 func main() {
+  // log stack
+  defer func() {
+    if r := recover(); r != nil {
+      buf := make([]byte, 1024 * 1024 * 8)
+      n := runtime.Stack(buf, true)
+      errFile, err := os.Create("err.local")
+      if err != nil { return }
+      errFile.WriteString(fmt.Sprintf("error: %v\n\n", r))
+      errFile.Write(buf[:n])
+      errFile.Close()
+    }
+  }()
   // termbox
   err := box.Init()
   if err != nil { log.Fatal(err) }
