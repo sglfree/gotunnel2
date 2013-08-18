@@ -105,6 +105,7 @@ func (self *Comm) UseConn(conn *net.TCPConn) {
     }
   }
   // restart
+  self.LastReadTime = time.Now()
   self.stopSender = make(chan struct{})
   self.stopAck = make(chan struct{})
   self.stoppedReader = make(chan struct{})
