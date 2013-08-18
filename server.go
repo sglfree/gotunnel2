@@ -18,6 +18,7 @@ import (
   "reflect"
   "fmt"
   "./utils"
+  "runtime/debug"
 )
 
 // configuration
@@ -66,6 +67,14 @@ func main() {
       }
     }
   }}()
+  // return memory to os
+  go func() {
+    ticker := time.NewTicker(time.Minute * 5)
+    for {
+      <-ticker.C
+      debug.FreeOSMemory()
+    }
+  }()
 
   addr, err := net.ResolveTCPAddr("tcp", globalConfig["listen"])
   if err != nil { log.Fatal("cannot resolve listen address ", err) }
