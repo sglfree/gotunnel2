@@ -144,8 +144,7 @@ func main() {
     printer.Print("%s %s >-< %s", delta(), formatFlow(comm.BytesSent), formatFlow(comm.BytesReceived))
     runtime.ReadMemStats(&memStats)
     printer.Print("%s memory in use", formatFlow(memStats.Alloc))
-    printer.Print("%d connections", clientReader.Count)
-    printer.Print("--- %d sessions ---", len(comm.Sessions))
+    printer.Print("--- %d connections %d sessions ---", clientReader.Count, len(comm.Sessions))
     for _, sessionId := range ByValue(comm.Sessions, func(a, b reflect.Value) bool {
       return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
     }).Interface().([]int64) {

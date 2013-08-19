@@ -42,6 +42,11 @@ func init() {
   }()
 }
 
+type Report struct {
+  reader *cr.ConnReader
+  comm *session.Comm
+}
+
 func main() {
   // log stack
   defer func() {
@@ -55,6 +60,7 @@ func main() {
       errFile.Close()
     }
   }()
+
   // termbox
   err := box.Init()
   if err != nil { log.Fatal(err) }
@@ -67,6 +73,7 @@ func main() {
       }
     }
   }}()
+
   // return memory to os
   go func() {
     ticker := time.NewTicker(time.Minute * 5)
@@ -76,6 +83,46 @@ func main() {
     }
   }()
 
+  // heartbeat
+  heartbeat := time.NewTicker(time.Second * 1)
+  reporterIn := make(chan *Report)
+  reporter := utils.MakeChan(reporterIn).(<-chan *Report)
+  go func() {
+    printer := NewPrinter(40)
+    var memStats runtime.MemStats
+    for _ = range heartbeat.C {
+      box.Clear(box.ColorDefault, box.ColorDefault)
+      printer.Reset()
+      printer.Print("conf %s", CONFIG_FILEPATH)
+      runtime.ReadMemStats(&memStats)
+      printer.Print("%s memory in use", formatFlow(memStats.Alloc))
+      comms := make(map[*session.Comm]bool)
+      loop: for { select {
+      case report := <-reporter:
+        if _, ok := comms[report.comm]; ok { break }
+        comms[report.comm] = true
+        printer.Print("--- %d connections %d sessions ---", report.reader.Count, len(report.comm.Sessions))
+        for _, sessionId := range ByValue(report.comm.Sessions, func(a, b reflect.Value) bool {
+          return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
+        }).Interface().([]int64) {
+          session := report.comm.Sessions[sessionId]
+          serv, ok := session.Obj.(*Serv)
+          if !ok { continue }
+          if serv.localClosed {
+            printer.Print("Lx %s", serv.hostPort)
+          } else if serv.remoteClosed {
+            printer.Print("Rx %s", serv.hostPort)
+          } else {
+            printer.Print(serv.hostPort)
+          }
+        }
+      default: break loop
+      }}
+      box.Flush()
+    }
+  }()
+
+  // listen for connections
   addr, err := net.ResolveTCPAddr("tcp", globalConfig["listen"])
   if err != nil { log.Fatal("cannot resolve listen address ", err) }
   ln, err := net.ListenTCP("tcp", addr)
@@ -118,7 +165,7 @@ func main() {
         newConnIn := make(chan *net.TCPConn)
         newConn := utils.MakeChan(newConnIn).(<-chan *net.TCPConn)
         connChangeChans[commId] = newConnIn
-        handleClient(conn, newConn, newConnIn)
+        handleClient(conn, newConn, newConnIn, reporterIn)
       }
     }()
   }
@@ -135,7 +182,7 @@ type Serv struct {
   closeOnce sync.Once
 }
 
-func handleClient(conn *net.TCPConn, connChange <-chan *net.TCPConn, connChangeIn chan *net.TCPConn) {
+func handleClient(conn *net.TCPConn, connChange <-chan *net.TCPConn, connChangeIn chan *net.TCPConn, reporterIn chan *Report) {
   defer close(connChangeIn)
   targetReader := cr.New()
   defer targetReader.Close()
@@ -155,8 +202,6 @@ func handleClient(conn *net.TCPConn, connChange <-chan *net.TCPConn, connChangeI
   }
 
   heartbeat := time.NewTicker(time.Second * 1)
-  var memStats runtime.MemStats
-  printer := NewPrinter(40)
 
   loop: for { select {
   // heartbeat
@@ -164,28 +209,10 @@ func handleClient(conn *net.TCPConn, connChange <-chan *net.TCPConn, connChangeI
     if time.Now().Sub(comm.LastReadTime) > time.Minute * 5 {
       break loop
     }
-    box.Clear(box.ColorDefault, box.ColorDefault)
-    printer.Reset()
-    runtime.ReadMemStats(&memStats)
-    printer.Print("conf %s", CONFIG_FILEPATH)
-    printer.Print("%s memory in use", formatFlow(memStats.Alloc))
-    printer.Print("%d connections", targetReader.Count)
-    printer.Print("--- %d sessions ---", len(comm.Sessions))
-    for _, sessionId := range ByValue(comm.Sessions, func(a, b reflect.Value) bool {
-      return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
-    }).Interface().([]int64) {
-      session := comm.Sessions[sessionId]
-      serv, ok := session.Obj.(*Serv)
-      if !ok { continue }
-      if serv.localClosed {
-        printer.Print("Lx %s", serv.hostPort)
-      } else if serv.remoteClosed {
-        printer.Print("Rx %s", serv.hostPort)
-      } else {
-        printer.Print(serv.hostPort)
-      }
+    reporterIn <- &Report{
+      reader: targetReader,
+      comm: comm,
     }
-    box.Flush()
   // conn change
   case conn := <-connChange:
     comm.UseConn(conn)
