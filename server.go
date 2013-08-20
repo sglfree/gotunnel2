@@ -84,7 +84,7 @@ func main() {
   }()
 
   // heartbeat
-  heartbeat := time.NewTicker(time.Second * 1)
+  heartbeat := time.NewTicker(time.Second * 3)
   reporterIn := make(chan *Report)
   reporter := utils.MakeChan(reporterIn).(<-chan *Report)
   go func() {
