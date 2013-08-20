@@ -305,6 +305,7 @@ func handleClient(conn *net.TCPConn, connChange <-chan *net.TCPConn, connChangeI
 }
 
 func (self *Serv) Close() {
+  self.CloseConn()
   self.closeOnce.Do(func() {
     self.session.Close()
     self.session = nil
