@@ -1,10 +1,10 @@
 package socks
 
 import (
-  "net"
+	"net"
 )
 
 type Client struct {
-  Conn *net.TCPConn
-  HostPort string
+	Conn     *net.TCPConn
+	HostPort string
 }
