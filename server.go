@@ -15,10 +15,9 @@ import (
   "bytes"
   "sync"
   "runtime"
-  "reflect"
   "fmt"
-  "./utils"
   "runtime/debug"
+  "reflect"
 )
 
 // configuration
@@ -40,11 +39,6 @@ func init() {
   go func() {
     http.ListenAndServe("0.0.0.0:55555", nil)
   }()
-}
-
-type Report struct {
-  reader *cr.ConnReader
-  comm *session.Comm
 }
 
 func main() {
@@ -83,10 +77,10 @@ func main() {
     }
   }()
 
+  clients := make(map[int64]*Client)
+
   // heartbeat
   heartbeat := time.NewTicker(time.Second * 3)
-  reporterIn := make(chan *Report)
-  reporter := utils.MakeChan(reporterIn).(<-chan *Report)
   go func() {
     printer := NewPrinter(40)
     var memStats runtime.MemStats
@@ -96,16 +90,12 @@ func main() {
       printer.Print("conf %s", CONFIG_FILEPATH)
       runtime.ReadMemStats(&memStats)
       printer.Print("%s memory in use", formatFlow(memStats.Alloc))
-      comms := make(map[*session.Comm]bool)
-      loop: for { select {
-      case report := <-reporter:
-        if _, ok := comms[report.comm]; ok { break }
-        comms[report.comm] = true
-        printer.Print("--- %d connections %d sessions ---", report.reader.Count, len(report.comm.Sessions))
-        for _, sessionId := range ByValue(report.comm.Sessions, func(a, b reflect.Value) bool {
+      for _, client := range clients {
+        printer.Print("--- %d connections %d sessions ---", client.reader.Count, len(client.comm.Sessions))
+        for _, sessionId := range ByValue(client.comm.Sessions, func(a, b reflect.Value) bool {
           return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
         }).Interface().([]int64) {
-          session := report.comm.Sessions[sessionId]
+          session := client.comm.Sessions[sessionId]
           serv, ok := session.Obj.(*Serv)
           if !ok { continue }
           if serv.localClosed {
@@ -116,8 +106,7 @@ func main() {
             printer.Print(serv.hostPort)
           }
         }
-      default: break loop
-      }}
+      }
       box.Flush()
     }
   }()
@@ -127,7 +116,6 @@ func main() {
   if err != nil { log.Fatal("cannot resolve listen address ", err) }
   ln, err := net.ListenTCP("tcp", addr)
   if err != nil { log.Fatal("cannot listen ", err) }
-  connChangeChans := make(map[int64]chan *net.TCPConn)
   for {
     conn, err := ln.AcceptTCP()
     if err != nil { continue }
@@ -158,17 +146,25 @@ func main() {
       // read comm id
       err = binary.Read(conn, binary.LittleEndian, &commId)
       if err != nil { return }
-      c, ok := connChangeChans[commId]
+      client, ok := clients[commId]
       if ok { // change conn
-        c <- conn
+        client.changeConn <- conn
       } else { // handle new comm
-        newConnIn := make(chan *net.TCPConn)
-        newConn := utils.MakeChan(newConnIn).(<-chan *net.TCPConn)
-        connChangeChans[commId] = newConnIn
-        handleClient(conn, newConn, newConnIn, reporterIn)
+        client := &Client{
+          changeConn: make(chan *net.TCPConn),
+        }
+        clients[commId] = client
+        client.handleConn(conn)
+        delete(clients, commId)
       }
     }()
   }
+}
+
+type Client struct {
+  changeConn chan *net.TCPConn
+  comm *session.Comm
+  reader *cr.ConnReader
 }
 
 type Serv struct {
@@ -182,11 +178,12 @@ type Serv struct {
   closeOnce sync.Once
 }
 
-func handleClient(conn *net.TCPConn, connChange <-chan *net.TCPConn, connChangeIn chan *net.TCPConn, reporterIn chan *Report) {
-  defer close(connChangeIn)
+func (self *Client) handleConn(conn *net.TCPConn) {
   targetReader := cr.New()
   defer targetReader.Close()
+  self.reader = targetReader
   comm := session.NewComm(conn, []byte(globalConfig["key"]))
+  self.comm = comm
   targetConnEvents := make(chan *Serv)
   connectTarget := func(serv *Serv, hostPort string) {
     defer func() {
@@ -204,19 +201,15 @@ func handleClient(conn *net.TCPConn, connChange <-chan *net.TCPConn, connChangeI
   heartbeat := time.NewTicker(time.Second * 1)
 
   loop: for { select {
-  // heartbeat
+    // heartbeat
   case <-heartbeat.C:
     if time.Now().Sub(comm.LastReadTime) > time.Minute * 5 {
       break loop
     }
-    reporterIn <- &Report{
-      reader: targetReader,
-      comm: comm,
-    }
-  // conn change
-  case conn := <-connChange:
+    // conn change
+  case conn := <-self.changeConn:
     comm.UseConn(conn)
-  // local-side events
+    // local-side events
   case ev := <-comm.Events:
     switch ev.Type {
     case session.SESSION: // new local session
@@ -255,7 +248,7 @@ func handleClient(conn *net.TCPConn, connChange <-chan *net.TCPConn, connChangeI
     case session.ERROR: // error
       break loop
     }
-  // target connection events
+    // target connection events
   case serv := <-targetConnEvents:
     if serv.targetConn == nil { // fail to connect to target
       serv.session.Signal(sigClose)
@@ -271,7 +264,7 @@ func handleClient(conn *net.TCPConn, connChange <-chan *net.TCPConn, connChangeI
       serv.targetConn.Write(data)
     }
     serv.sendQueue = nil
-  // target events
+    // target events
   case ev := <-targetReader.Events:
     serv := ev.Obj.(*Serv)
     switch ev.Type {
