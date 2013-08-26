@@ -1,7 +1,6 @@
 package main
 
 import (
-  box "github.com/nsf/termbox-go"
   "net"
   "log"
   cr "./conn_reader"
@@ -9,6 +8,7 @@ import (
   "time"
   "io"
   "os"
+  "os/exec"
   _ "net/http/pprof"
   "net/http"
   "encoding/binary"
@@ -55,19 +55,6 @@ func main() {
     }
   }()
 
-  // termbox
-  err := box.Init()
-  if err != nil { log.Fatal(err) }
-  defer box.Close()
-  go func() { for {
-    ev := box.PollEvent()
-    if ev.Type == box.EventKey {
-      if ev.Key == box.KeyEsc {
-        os.Exit(0)
-      }
-    }
-  }}()
-
   // return memory to os
   go func() {
     ticker := time.NewTicker(time.Minute * 5)
@@ -79,35 +66,48 @@ func main() {
 
   clients := make(map[int64]*Client)
 
-  // heartbeat
-  heartbeat := time.NewTicker(time.Second * 3)
+  // control
   go func() {
-    printer := NewPrinter(40)
-    var memStats runtime.MemStats
-    for _ = range heartbeat.C {
-      box.Clear(box.ColorDefault, box.ColorDefault)
-      printer.Reset()
-      printer.Print("conf %s", CONFIG_FILEPATH)
-      runtime.ReadMemStats(&memStats)
-      printer.Print("%s memory in use", formatFlow(memStats.Alloc))
-      for _, client := range clients {
-        printer.Print("--- %d connections %d sessions ---", client.reader.Count, len(client.comm.Sessions))
-        for _, sessionId := range ByValue(client.comm.Sessions, func(a, b reflect.Value) bool {
-          return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
-        }).Interface().([]int64) {
-          session := client.comm.Sessions[sessionId]
-          serv, ok := session.Obj.(*Serv)
-          if !ok { continue }
-          if serv.localClosed {
-            printer.Print("Lx %s", serv.hostPort)
-          } else if serv.remoteClosed {
-            printer.Print("Rx %s", serv.hostPort)
-          } else {
-            printer.Print(serv.hostPort)
+    exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+    exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+    input := make([]byte, 1)
+    for {
+      os.Stdin.Read(input)
+      switch input[0] {
+      case 'l':
+        for _, client := range clients {
+          fmt.Printf("--- %d connections %d sessions ---\n", client.reader.Count, len(client.comm.Sessions))
+          for _, sessionId := range ByValue(client.comm.Sessions, func(a, b reflect.Value) bool {
+            return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
+          }).Interface().([]int64) {
+            session := client.comm.Sessions[sessionId]
+            serv, ok := session.Obj.(*Serv)
+            if !ok { continue }
+            if serv.localClosed {
+              fmt.Printf("Lx %s\n", serv.hostPort)
+            } else if serv.remoteClosed {
+              fmt.Printf("Rx %s\n", serv.hostPort)
+            } else {
+              fmt.Printf("%s\n", serv.hostPort)
+            }
           }
         }
       }
-      box.Flush()
+    }
+  }()
+
+  // heartbeat
+  heartbeat := time.NewTicker(time.Second * 3)
+  go func() {
+    var memStats runtime.MemStats
+    for _ = range heartbeat.C {
+      runtime.ReadMemStats(&memStats)
+      var connNum, sessionNum int
+      for _, client := range clients {
+        connNum += int(client.reader.Count)
+        sessionNum += len(client.comm.Sessions)
+      }
+      fmt.Printf("using %s, %d clients, %d conns, %d sessions\n", formatFlow(memStats.Alloc), len(clients), connNum, sessionNum)
     }
   }()
 
