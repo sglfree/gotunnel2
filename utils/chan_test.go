@@ -7,10 +7,10 @@ import (
 )
 
 func TestChan(t *testing.T) {
-	for ci := 0; ci < 10; ci++ {
+	for ci := 0; ci < 5; ci++ {
 		in := make(chan string)
 		out := MakeChan(in).(<-chan string)
-		n := 1000
+		n := 10000
 		var memStats runtime.MemStats
 		for i := 0; i < n; i++ {
 			in <- fmt.Sprintf("%d", i)

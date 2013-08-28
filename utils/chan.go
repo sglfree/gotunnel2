@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"container/list"
 	"log"
 	"reflect"
 )
@@ -15,24 +14,24 @@ func MakeChan(in interface{}) (ret interface{}) {
 	}
 	go func() {
 		defer outValue.Close()
-		buffer := list.New()
+		buffer := make([]interface{}, 0, 32)
 		for {
-			if buffer.Len() > 0 {
+			if len(buffer) > 0 {
 				chosen, v, ok := reflect.Select([]reflect.SelectCase{reflect.SelectCase{
 					Dir:  reflect.SelectSend,
 					Chan: outValue,
-					Send: buffer.Front().Value.(reflect.Value),
+					Send: buffer[0].(reflect.Value),
 				}, reflect.SelectCase{
 					Dir:  reflect.SelectRecv,
 					Chan: inValue,
 				}})
 				if chosen == 0 { // out
-					buffer.Remove(buffer.Front())
+					buffer = buffer[1:]
 				} else {
 					if !ok {
 						return
 					}
-					buffer.PushBack(v)
+					buffer = append(buffer, v)
 				}
 			} else {
 				_, v, ok := reflect.Select([]reflect.SelectCase{reflect.SelectCase{
@@ -42,7 +41,7 @@ func MakeChan(in interface{}) (ret interface{}) {
 				if !ok {
 					return
 				}
-				buffer.PushBack(v)
+				buffer = append(buffer, v)
 			}
 		}
 	}()
