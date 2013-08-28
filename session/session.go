@@ -18,7 +18,7 @@ type Session struct {
 	serial            uint32 // next packet serial
 	maxReceivedSerial uint32
 	maxAckSerial      uint32
-	packets           *Queue // packet buffer
+	packets           []*Packet
 	StartTime         time.Time
 }
 
@@ -43,7 +43,7 @@ func (self *Session) sendPacket(t uint8, data []byte) {
 	buf.Write(data[i-aes.BlockSize:])
 	packet := &Packet{serial: serial, data: buf.Bytes()}
 	self.comm.sendQueueIn <- packet
-	self.packets.En(packet)
+	self.packets = append(self.packets, packet)
 	self.dataSent += uint64(len(data))
 }
 

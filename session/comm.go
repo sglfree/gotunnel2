@@ -101,9 +101,9 @@ func (self *Comm) UseConn(conn *net.TCPConn) {
 	// resent
 	self.conn = conn
 	for _, session := range self.Sessions {
-		for t, h := session.packets.tail, session.packets.head; t != h; t = t.next {
-			self.write(t.data)
-			self.BytesSent += uint64(len(t.data))
+		for _, packet := range session.packets {
+			self.write(packet.data)
+			self.BytesSent += uint64(len(packet.data))
 		}
 	}
 	// restart
@@ -197,10 +197,11 @@ loop:
 		if t == typeAck {
 			session.maxAckSerial = serial
 			// clear packet buffer
-			for p, h := session.packets.tail, session.packets.head; p != h && p.serial <= serial; {
-				session.packets.De()
-				p = session.packets.tail
+			i := 0
+			for l := len(session.packets); i < l && session.packets[i].serial <= serial; {
+				i += 1
 			}
+			session.packets = session.packets[i:]
 			continue loop
 		}
 		// check serial
@@ -288,7 +289,7 @@ func (self *Comm) NewSession(id int64, data []byte, obj interface{}) *Session {
 		Id:        id,
 		comm:      self,
 		Obj:       obj,
-		packets:   NewQueue(),
+		packets:   make([]*Packet, 0, 64),
 		StartTime: time.Now(),
 	}
 	if isNew {
