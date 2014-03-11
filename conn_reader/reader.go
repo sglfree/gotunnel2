@@ -1,7 +1,6 @@
 package conn_reader
 
 import (
-	"fmt"
 	"io"
 	"math/rand"
 	"net"
@@ -22,7 +21,7 @@ type ConnReader struct {
 	Events   <-chan Event
 	EventsIn chan Event
 	Count    int32
-	pool     *BytesPool
+	Pool     *BytesPool
 }
 
 const (
@@ -41,7 +40,7 @@ func New() *ConnReader {
 	self := new(ConnReader)
 	self.EventsIn = make(chan Event)
 	self.Events = utils.MakeChan(self.EventsIn).(<-chan Event)
-	self.pool = NewPool(BUFFER_SIZE)
+	self.Pool = NewPool(BUFFER_SIZE)
 	return self
 }
 
@@ -50,7 +49,7 @@ func (self *ConnReader) Add(tcpConn *net.TCPConn, obj interface{}) {
 	go func() {
 		defer atomic.AddInt32(&self.Count, int32(-1))
 		for {
-			buf := self.pool.Get()
+			buf := self.Pool.Get()
 			n, err := tcpConn.Read(buf)
 			if n > 0 {
 				self.EventsIn <- Event{DATA, buf[:n], obj}
@@ -72,10 +71,10 @@ func (self *ConnReader) Close() {
 }
 
 type BytesPool struct {
-	pool  chan []byte
-	size  int
-	reuse int
-	alloc int
+	pool   chan []byte
+	size   int
+	Reuses int
+	Allocs int
 }
 
 func NewPool(size int) *BytesPool {
@@ -89,12 +88,11 @@ func (self *BytesPool) Get() []byte {
 	var bs []byte
 	select {
 	case bs = <-self.pool:
-		self.reuse++
+		self.Reuses++
 	default:
-		self.alloc++
+		self.Allocs++
 		bs = make([]byte, self.size)
 	}
-	fmt.Printf("%d reused, %d alloc\n", self.reuse, self.alloc)
 	runtime.SetFinalizer(&bs, func(bs *[]byte) {
 		select {
 		case self.pool <- *bs:

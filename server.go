@@ -112,7 +112,12 @@ func main() {
 				connNum += int(client.reader.Count)
 				sessionNum += len(client.comm.Sessions)
 			}
-			fmt.Printf("using %s, %d clients, %d conns, %d sessions\n", formatFlow(memStats.Alloc), len(clients), connNum, sessionNum)
+			var allocs, reuses int
+			for _, c := range clients {
+				allocs += c.reader.Pool.Allocs
+				reuses += c.reader.Pool.Reuses
+			}
+			fmt.Printf("using %s, %d clients, %d conns, %d sessions, buf alloc/reuse %d / %d\n", formatFlow(memStats.Alloc), len(clients), connNum, sessionNum, allocs, reuses)
 		}
 	}()
 
