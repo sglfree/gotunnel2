@@ -1,8 +1,6 @@
 package main
 
 import (
-	cr "./conn_reader"
-	"./session"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -12,12 +10,13 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/exec"
-	"reflect"
 	"runtime"
 	"runtime/debug"
 	"sync"
 	"time"
+
+	cr "./conn_reader"
+	"./session"
 )
 
 // configuration
@@ -70,36 +69,38 @@ func main() {
 	clients := make(map[int64]*Client)
 
 	// control
-	go func() {
-		exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
-		exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
-		input := make([]byte, 1)
-		for {
-			os.Stdin.Read(input)
-			switch input[0] {
-			case 'l':
-				for _, client := range clients {
-					fmt.Printf("--- %d connections %d sessions ---\n", client.reader.Count, len(client.comm.Sessions))
-					for _, sessionId := range ByValue(client.comm.Sessions, func(a, b reflect.Value) bool {
-						return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
-					}).Interface().([]int64) {
-						session := client.comm.Sessions[sessionId]
-						serv, ok := session.Obj.(*Serv)
-						if !ok {
-							continue
-						}
-						if serv.localClosed {
-							fmt.Printf("Lx %s\n", serv.hostPort)
-						} else if serv.remoteClosed {
-							fmt.Printf("Rx %s\n", serv.hostPort)
-						} else {
-							fmt.Printf("%s\n", serv.hostPort)
+	/*
+		go func() {
+			exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+			exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+			input := make([]byte, 1)
+			for {
+				os.Stdin.Read(input)
+				switch input[0] {
+				case 'l':
+					for _, client := range clients {
+						fmt.Printf("--- %d connections %d sessions ---\n", client.reader.Count, len(client.comm.Sessions))
+						for _, sessionId := range ByValue(client.comm.Sessions, func(a, b reflect.Value) bool {
+							return a.Interface().(*session.Session).StartTime.After(b.Interface().(*session.Session).StartTime)
+						}).Interface().([]int64) {
+							session := client.comm.Sessions[sessionId]
+							serv, ok := session.Obj.(*Serv)
+							if !ok {
+								continue
+							}
+							if serv.localClosed {
+								fmt.Printf("Lx %s\n", serv.hostPort)
+							} else if serv.remoteClosed {
+								fmt.Printf("Rx %s\n", serv.hostPort)
+							} else {
+								fmt.Printf("%s\n", serv.hostPort)
+							}
 						}
 					}
 				}
 			}
-		}
-	}()
+		}()
+	*/
 
 	// heartbeat
 	heartbeat := time.NewTicker(time.Second * 3)
